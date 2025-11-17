@@ -1,0 +1,30 @@
+[project]
+name = "smart-support-ai"
+version = "0.1.0"
+description = "AI 智能客服系统（FastAPI + RAG + DeepSeek）"
+requires-python = ">=3.12"
+authors = [
+    { name = "fanlou", email = "q1572863519@outlook.com" }
+]
+dependencies = [
+    "fastapi>=0.121.1",
+    "httpx>=0.28.1",
+    "langchain[openai]>=1.0.5",
+    "langchain-community>=0.4.1",
+    "langgraph>=1.0.3",
+    "loguru>=0.7.3",
+    "pydantic>=2.12.4",
+    "pymysql>=1.1.2",
+    "python-dotenv>=1.2.1",
+    "redis>=7.0.1",
+    "sqlalchemy>=2.0.44",
+    "uvicorn[standard]>=0.38.0",
+    "langgraph-cli[inmem]>=0.4.7",
+    "pytest"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+
+
