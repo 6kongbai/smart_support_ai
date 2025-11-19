@@ -1,0 +1,42 @@
+# =============================
+# 全局默认模型（主模型）
+# =============================
+DEFAULT_MODEL: DEEPSEEK
+
+# =============================
+# LLM Providers（平台配置）
+# =============================
+PROVIDERS:
+  DASHSCOPE:
+    BASE_URL: $DASHSCOPE_BASE_URL
+    API_KEY: $DASHSCOPE_API_KEY
+
+  OPENAI:
+    BASE_URL: $OPENAI_BASE_URL
+    API_KEY: $OPENAI_API_KEY
+
+  DEEPSEEK:
+    BASE_URL: $DEEPSEEK_BASE_URL
+    API_KEY: $DEEPSEEK_API_KEY
+
+# =============================
+# Model Definitions（模型定义）
+# =============================
+MODELS:
+  DEEPSEEK:
+    PROVIDER: DEEPSEEK
+    MODEL: deepseek-chat
+
+  QWEN:
+    PROVIDER: DASHSCOPE
+    MODEL: qwen-plus
+
+  OPENAI:
+    PROVIDER: OPENAI
+    MODEL: gpt-4o-mini
+
+NEO4J:
+  URI: bolt://106.55.135.2
+  USERNAME: neo4j
+  PASSWORD: 108775622q
+  DATABASE: neo4j

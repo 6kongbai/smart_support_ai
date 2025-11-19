@@ -1,3 +1,4 @@
+import pytest
 from typing import List
 
 
@@ -17,6 +18,3 @@ def jump(nums: List[int]) -> int:
 
     return res
 
-
-if __name__ == '__main__':
-    print(jump([2, 3, 1, 1, 4]))
