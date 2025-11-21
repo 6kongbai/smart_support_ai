@@ -3,12 +3,12 @@
 
 import os
 from datetime import datetime
-from typing import List, Any
+from typing import List, Any, Mapping
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from langchain_core.messages import BaseMessage, SystemMessage
 
-from app.graph.types import State
+from app.core.logger import logger
 
 # Initialize Jinja2 environment
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,10 +18,24 @@ _env = Environment(
     autoescape=select_autoescape(['html', 'xml', 'md'])
 )
 
+def get_prompt_template(
+        prompt_name: str,
+        **kwargs
+) -> str:
+    try:
+        # 加载模版
+        template = _env.get_template(f"{prompt_name}.md")
+        # 渲染文本
+        return template.render(**kwargs)
+
+    except Exception as e:
+        logger.error(f"Error getting template '{prompt_name}': {e}")
+        raise ValueError(f"Error getting template '{prompt_name}': {e}")
+
 
 def apply_prompt_template(
         prompt_name: str,
-        state: State,  # 建议接收字典，或者是 State 对象
+        state: Mapping[str, Any],
         **kwargs: Any
 ) -> List[BaseMessage]:
     """
@@ -54,5 +68,5 @@ def apply_prompt_template(
         return [SystemMessage(content=system_content)] + state_dict.get("messages", [])
 
     except Exception as e:
-        # TODO 日志记录
+        logger.error(f"Error applying template '{prompt_name}': {e}")
         raise ValueError(f"Error applying template '{prompt_name}': {e}")

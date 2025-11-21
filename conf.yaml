@@ -1,11 +1,9 @@
-# =============================
-# 全局默认模型（主模型）
-# =============================
-DEFAULT_MODEL: DEEPSEEK
+DEFAULTS:
+  CHAT: deepseek-chat
+  REASONING: deepseek-reasoner
+  EMBEDDING: text-embedding-v4
+  ROUTER: router-lite
 
-# =============================
-# LLM Providers（平台配置）
-# =============================
 PROVIDERS:
   DASHSCOPE:
     BASE_URL: $DASHSCOPE_BASE_URL
@@ -19,24 +17,44 @@ PROVIDERS:
     BASE_URL: $DEEPSEEK_BASE_URL
     API_KEY: $DEEPSEEK_API_KEY
 
-# =============================
-# Model Definitions（模型定义）
-# =============================
+
 MODELS:
-  DEEPSEEK:
+  # --- 常规对话模型 ---
+  deepseek-chat:
+    TYPE: "chat"
     PROVIDER: DEEPSEEK
-    MODEL: deepseek-chat
+    temperature: 0.7
 
-  QWEN:
+  deepseek-reasoner:
+    TYPE: "chat"
+    PROVIDER: DEEPSEEK
+
+  qwen-max:
+    TYPE: "chat"
     PROVIDER: DASHSCOPE
-    MODEL: qwen-plus
 
-  OPENAI:
+  gpt-4o-mini:
+    TYPE: "chat"
     PROVIDER: OPENAI
-    MODEL: gpt-4o-mini
+
+  # --- 路由专用配置 (特殊配置) ---
+  router-lite:
+    TYPE: "chat"
+    PROVIDER: OPENAI
+    MODEL_NAME: "gpt-5.1"
+    temperature: 0
+
+  # --- Embedding ---
+  text-embedding-v4:
+    TYPE: "embedding"
+    PROVIDER: DASHSCOPE
+
 
 NEO4J:
   URI: bolt://106.55.135.2
   USERNAME: neo4j
   PASSWORD: 108775622q
   DATABASE: neo4j
+
+MILVUS:
+  URI: http://112.124.68.11:19530

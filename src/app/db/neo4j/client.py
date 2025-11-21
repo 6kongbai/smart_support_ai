@@ -2,12 +2,19 @@ from functools import wraps
 from typing import Callable, Generator
 
 from langchain_neo4j import Neo4jGraph
-from neo4j import GraphDatabase, Session
+from neo4j import GraphDatabase, Session, Driver
 
 from app.core.loader import load_yaml_config
 
-conf = load_yaml_config()
-neo4j_conf = conf.get("NEO4J")
+neo4j_conf = load_yaml_config().get("NEO4J")
+
+driver = GraphDatabase.driver(
+    uri=neo4j_conf["URI"],
+    auth=(neo4j_conf["USERNAME"], neo4j_conf["PASSWORD"]),
+    max_connection_lifetime=3600,
+    max_connection_pool_size=50,
+    connection_acquisition_timeout=30,
+)
 
 
 def get_neo4j_graph() -> Neo4jGraph:
@@ -32,36 +39,22 @@ def get_neo4j_graph() -> Neo4jGraph:
         raise e
 
 
-def get_session() -> Session:
+def _get_session() -> Session:
     """统一管理 session 创建，方便后续扩展."""
-    driver = GraphDatabase.driver(
-        uri=neo4j_conf["URI"],
-        auth=(neo4j_conf["USERNAME"], neo4j_conf["PASSWORD"]),
-        max_connection_lifetime=3600,
-        max_connection_pool_size=50,
-        connection_acquisition_timeout=30,
-    )
     return driver.session(database=neo4j_conf["DATABASE"])
 
 
 def with_session(func: Callable):
     """
     为函数自动注入 Neo4j session。
-    兼容普通函数和类方法。
+    兼容普通函数
     """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        session = get_session()
-
+        session = _get_session()
         try:
-            # 检查是否是类方法：func 的第一个参数应该是 self
-            if args and hasattr(args[0], func.__name__):
-                # 把 self 取出来，其后注入 session
-                return func(args[0], session, *args[1:], **kwargs)
-            else:
-                # 普通函数：第一个参数就是 session
-                return func(session, *args, **kwargs)
+            return func(session, *args, **kwargs)
         finally:
             session.close()
 
@@ -77,7 +70,7 @@ def get_neo4j_session() -> Generator[Session, None, None]:
         def handler(session: Session = Depends(get_neo4j_session)):
             ...
     """
-    session = get_session()
+    session = _get_session()
     try:
         yield session
     finally:

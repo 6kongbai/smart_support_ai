@@ -1,52 +1,75 @@
 from functools import cache
+from typing import Literal, Optional
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.embeddings import Embeddings
 
 from app.core.loader import load_yaml_config
-from app.llms.provider import create_llm
+from app.llms.provider import create_llm_instance
+
+# 定义业务意图类型
+LLMIntent = Literal["CHAT", "REASONING", "EMBEDDING", "ROUTER"]
+
 
 @cache
-def get_llm_by_name(name: str = None) -> BaseChatModel:
+def _get_model_instance(intent_or_name: str, expected_type: str):
     """
-    Get a language model instance by name.
-    
-    Args:
-        name: The name of the model to retrieve. If None, uses the DEFAULT_MODEL from config.
-        
-    Returns:
-        BaseChatModel: An instance of the requested language model.
-        
-    Raises:
-        ValueError: If the model name is not found in configuration or if DEFAULT_MODEL 
-                   is not defined when name is None.
+    确保整个应用生命周期内，同一个配置的模型只初始化一次。
     """
     conf = load_yaml_config()
 
-    # Select default model
-    target_name = name or conf.get("DEFAULT_MODEL")
+    # 1. 解析名称：优先查 DEFAULTS
+    if intent_or_name in conf.get("DEFAULTS", {}):
+        target_key = conf["DEFAULTS"][intent_or_name]
+    else:
+        target_key = intent_or_name
 
-    if not target_name:
-        raise ValueError("DEFAULT_MODEL not defined in conf.yaml")
-    target_name = target_name.upper()
-    if name is None:
-        return get_llm_by_name(target_name)
+    # 2. 获取模型静态配置
+    if target_key not in conf["MODELS"]:
+        raise ValueError(f"Model '{target_key}' not defined in MODELS config.")
 
-    models = conf["MODELS"]
-    providers = conf["PROVIDERS"]
+    model_conf = conf["MODELS"][target_key]
 
-    if target_name not in models:
-        raise ValueError(f"Model '{target_name}' not found in MODELS")
+    # 3. 校验类型安全
+    if model_conf.get("TYPE") != expected_type:
+        raise ValueError(
+            f"Requesting {expected_type} but model '{target_key}' is type {model_conf.get('TYPE')}")
 
-    model_conf = models[target_name]
+    # 4. 获取 Provider 配置
     provider_name = model_conf["PROVIDER"]
+    if provider_name not in conf["PROVIDERS"]:
+        raise ValueError(f"Provider '{provider_name}' not defined.")
 
-    if provider_name not in providers:
-        raise ValueError(f"Provider '{provider_name}' missing")
+    # 5. 合并配置
+    # 将 target_key 作为 'model' 注入，供 provider 使用 (如果没有 MODEL_NAME 就用这个)
+    merged_conf = {
+        **conf["PROVIDERS"][provider_name],
+        **model_conf,
+        "model": target_key
+    }
 
-    # Merge local + provider configuration
-    merged_conf = {**providers[provider_name], **model_conf}
+    # 6. 创建实例
+    return create_llm_instance(provider_name, expected_type, merged_conf)
 
-    # Create LLM
-    llm = create_llm(provider_name.lower(), merged_conf)
 
-    return llm
+def get_chat_model(name: Optional[str] = "CHAT") -> BaseChatModel:
+    """
+    获取通用聊天模型。
+    参数配置(如 temperature) 请在 YAML 中修改。
+    """
+    return _get_model_instance(name, expected_type="chat")
+
+
+def get_embedding_model(name: Optional[str] = "EMBEDDING") -> Embeddings:
+    """
+    获取 Embedding 模型。
+    """
+    return _get_model_instance(name, expected_type="embedding")
+
+
+def get_router_model() -> BaseChatModel:
+    """
+    获取路由模型。
+    对应的 YAML 配置 'router-lite' 中已包含 temperature: 0。
+    """
+    return _get_model_instance("ROUTER", expected_type="chat")

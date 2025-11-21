@@ -95,16 +95,21 @@ def init_neo4j(session: Session):
     run_supply(session, "Customer", "CustomerID", "CompanyName")
     print("✓ Neo4j 创建 Customer 实体成功")
 
-    # 6. 创建 Order 实体
+    # 6. 创建 Shipper 实体
+    run_cypher_file(session, os.path.join(cypher_dir, "create_shipper.cypher"))
+    run_supply(session, "Shipper", "ShipperID", "CompanyName")
+    print("✓ Neo4j 创建 Shipper 实体成功")
+
+    # 7. 创建 Order 实体
     run_cypher_file(session, os.path.join(cypher_dir, "create_order.cypher"))
     run_supply(session, "Order", "OrderID", "OrderID")
     print("✓ Neo4j 创建 Order 实体成功")
 
-    # 7.创建 Review 实体
+    # 8.创建 Review 实体
     run_cypher_file(session, os.path.join(cypher_dir, "create_review.cypher"))
     run_supply(session, "Review", "ReviewID", "ReviewID")
     print("✓ Neo4j 创建 Review 实体成功")
 
-    # 8. 创建 Order和 Product关系
+    # 9. 创建 Order和 Product关系
     run_cypher_file(session, os.path.join(cypher_dir, "create_order_details.cypher"))
     print("✓ Neo4j 创建 Order和 Product关系成功")

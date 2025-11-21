@@ -1,5 +1,5 @@
 import os
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 from typing import Any, Dict
 
@@ -47,7 +47,7 @@ def _get_config_file_path() -> str:
     return str((Path(__file__).parents[3] / "conf.yaml").resolve())
 
 
-@lru_cache(maxsize=1)
+@cache
 def load_yaml_config(file_path: str | None = None) -> Dict[str, Any]:
     """
     加载 YAML 配置文件，并自动替换掉其中的环境变量引用。
@@ -55,7 +55,9 @@ def load_yaml_config(file_path: str | None = None) -> Dict[str, Any]:
     """
     if file_path is None:
         file_path = _get_config_file_path()
-        load_yaml_config(file_path)
+        return load_yaml_config(file_path)
+
+    file_path = str(Path(file_path).resolve())
 
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Config file '{file_path}' does not exist.")

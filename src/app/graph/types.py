@@ -12,7 +12,6 @@ class GradeHallucinations(BaseModel):
         description="Answer is grounded in the facts, '1' or '0'"
     )
 
-
 class GuardrailsOutput(BaseModel):
     """
     格式化输出，用于判断用户的问题是否与图谱内容相关
@@ -30,13 +29,13 @@ JumpTo = Literal["general-query", "additional-query", "graphrag-query", "image-q
 
 class Router(BaseModel):
     """Determine user intent and the next routing step."""
+    reasoning: Annotated[str, Field(
+        description="简要的分析用户的意图，然后给出选择这个路由的原因"
+    )]
+    next: Annotated[JumpTo, Field(
+        description="根据上述分析，选择最匹配的路由目标。"
+    )]
+    confidence: Annotated[int, Field(
+        description="对该分类判断的置信度评分，范围 1 到 5（5表示非常确定，1表示完全不确定）。"
+    )]
 
-    cause: Annotated[str, Field(description="简短分析用户的意图，以及判断是否缺少关键参数的依据。")]
-    next: Annotated[JumpTo, Field(..., description="下一步的路由目标")]
-
-
-class State(MessagesState):
-    jump_to: NotRequired[Annotated[JumpTo | None, EphemeralValue]]
-    hallucination: NotRequired[Annotated[GradeHallucinations, EphemeralValue]]
-    cause: NotRequired[Annotated[str | None, EphemeralValue]]
-    answer: NotRequired[str]

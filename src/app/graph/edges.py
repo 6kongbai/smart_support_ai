@@ -1,7 +1,12 @@
+from typing import Literal
+
 from app.graph.types import State
 
 
-def route_query(state: State) -> str:
+def route_conditional_edge(
+        state: State
+) -> Literal[
+    "respond_to_general_query", "get_additional_info", "create_research_plan", "create_image_query", "create_file_query"]:
     """根据 state.jump_to 的分类结果映射到下一跳节点。"""
 
     match state["jump_to"]:
