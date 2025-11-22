@@ -1,59 +1,70 @@
-from functools import lru_cache
+import re
+from functools import cache
+from typing import Any
 
-import regex as re
 from langchain_neo4j import Neo4jGraph
+from langchain_neo4j.chains.graph_qa.cypher_utils import Schema, CypherQueryCorrector
 
 from app.db.neo4j.client import get_neo4j_graph
 
+# 匹配目标：移除 Schema 字符串中自动生成的、无关的 'CypherQuery' 节点定义
+CYPHER_QUERY_NODE_PATTERN = re.compile(
+    r"^(- \*\*CypherQuery\*\*[\s\S]+?)(^Relationship properties|- \*)",
+    re.MULTILINE
+)
 
-def get_cypher_query_node_graph_schema() -> str:
-    # 以 "- CypherQuery" 开始的整个段落，直到 "Relationship properties" 或 "- " 为止
-    return r"^(- \*\*CypherQuery\*\*[\s\S]+?)(^Relationship properties|- \*)"
 
-
-def retrieve_and_parse_schema_from_graph_for_prompts(graph: Neo4jGraph) -> str:
+def _clean_schema_string(schema_str: str) -> str:
     """
-    关键点：
-    schema 指的是 Neo4j 数据库的结构描述，包括：
-    - 节点类型：如 Product, Category, Supplier 等
-    - 节点属性：如 ProductName, UnitPrice, CategoryName 等
-    - 关系类型：如 BELONGS_TO, SUPPLIED_BY, CONTAINS 等
-    - 关系属性：关系上可能的属性（如有）
-
-    提取出来的Schema 大致如下：
-    Node properties:
-        - **Product**: ProductID, ProductName, UnitPrice, UnitsInStock...
-        - **Category**: CategoryID, CategoryName, Description...
-
-    Relationship properties:
-        - **BELONGS_TO**:
-        - **SUPPLIED_BY**:
-
-    必要性：
-    1. 动态适应数据库变化：如果数据库结构变化（新增节点类型、关系或属性），系统无需修改代码即可适应
-    2. 提高查询准确性：通过向大语言模型提供准确的数据库结构，大大降低生成错误查询的可能性
-    3. 促进零样本学习：即使没有特定领域的示例，模型也能根据提供的结构信息生成符合语法的查询
+    清理原始 Schema 字符串：
+    1. 移除无关的 CypherQuery 节点。
+    2. 替换花括号以防止 LangChain Prompt 注入冲突。
     """
+    # 移除干扰节点
+    if "CypherQuery" in schema_str:
+        schema_str = CYPHER_QUERY_NODE_PATTERN.sub(r"\2", schema_str)
 
-    schema: str = graph.get_schema
-
-    # 过滤掉对用户查询不相关的内部结构信息
-    if "CypherQuery" in schema:
-        schema = re.sub(
-            get_cypher_query_node_graph_schema(), r"\2", schema, flags=re.MULTILINE
-        )
-
-    # 在这里添加一行：将所有花括号替换为方括号，避免模板变量冲突
-    # 因为 Schema 中包含 { } ，会与 ChatPromptTemplate 模版中的 input_variables
-    schema = schema.replace("{", "[").replace("}", "]")
-
-    return schema
+    # 替换花括号：Neo4j schema 包含 {prop: type}，但这会与 PromptTemplate 的 {variable} 冲突
+    # 将 { } 替换为 [ ] 是业界通用的做法
+    return schema_str.replace("{", "[").replace("}", "]")
 
 
-@lru_cache(maxsize=1)
-def get_graph_schema():
+@cache
+def get_graph_schema() -> str:
+    """
+    获取并缓存格式化后的文本 Schema。
+    用于注入到 Prompt Template 中。
+    """
     try:
-        neo4j_graph = get_neo4j_graph()
-        return retrieve_and_parse_schema_from_graph_for_prompts(neo4j_graph)
+        graph: Neo4jGraph = get_neo4j_graph()
+        # 注意：graph.schema 是一个属性，获取它可能会触发一次对 Neo4j 的查询（取决于 LangChain 版本）
+        raw_schema = graph.schema
+        return _clean_schema_string(raw_schema)
     except Exception as e:
+        # 在这里可以添加日志 logging.error(f"获取 Schema 失败: {e}")
         raise e
+
+
+@cache
+def get_structured_schema() -> dict[str, Any]:
+    """
+    获取并缓存结构化的 Schema 列表。
+    仅用于 CypherQueryCorrector，不直接用于 Prompt。
+    """
+    graph = get_neo4j_graph()
+    return graph.structured_schema
+
+
+@cache
+def get_corrector() -> CypherQueryCorrector:
+    """
+    获取全局单例的 CypherQueryCorrector。
+    初始化 Corrector 开销较大，必须缓存。
+    """
+
+    structured_schema = get_structured_schema()
+    schemas = [
+        Schema(el["start"], el["type"], el["end"])
+        for el in structured_schema.get("relationships", [])
+    ]
+    return CypherQueryCorrector(schemas)

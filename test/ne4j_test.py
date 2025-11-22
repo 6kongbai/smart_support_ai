@@ -2,13 +2,29 @@ import unittest
 
 from neo4j import Session
 
-from app.db.neo4j.client import with_session, get_neo4j_graph
+from app.db.neo4j.client import with_session
 from app.db.neo4j.init_neo4j import clear_neo4j, init_neo4j
-from app.db.neo4j.utils import get_graph_schema
+from app.db.neo4j.utils import get_graph_schema, get_corrector
 
+
+def test_get_graph_schema():
+    print(get_graph_schema())
 
 def test_langchain_neo4j():
-    print(get_graph_schema())
+    corrector = get_corrector()
+    # 运行测试
+    query_1 = "MATCH (c:Category)-[:BELONGS_TO]->(p:Product) RETURN p.name"
+    print("测试 1: 类别与产品的方向反转", )
+    print(corrector(query_1))
+    print()
+    print("测试 2: 订单与客户方向反转")
+    query_2 = "MATCH (o:Order)-[:PLACED]->(c:Customer) WHERE c.name = 'ZhangSan' RETURN o"
+    print(corrector(query_2))
+    print()
+    print("测试 3: 多跳路径双重错误")
+    query_3 = "MATCH (r:Review)<-[:REVIEWS]-(p:Product)-[:CONTAINS]->(o:Order) RETURN r"
+    print(corrector(query_3))
+
 
 def test_clear_neo4j():
     clear_neo4j()

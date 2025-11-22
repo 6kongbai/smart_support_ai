@@ -1,16 +1,20 @@
 from typing import Any, Dict, cast
 
 from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 
 from loguru import logger
+
 from app.db.neo4j.utils import get_graph_schema
 from app.graphrag.state import InputState
 from app.graphrag.types import PlannerOutput
-from app.llms.llm import get_chat_model, get_router_model
+from app.llms.llm import get_router_model
 from app.prompts.template import get_prompt_template
 
 
-async def planner(state: InputState) -> Dict[str, Any]:
+async def planner(
+        state: InputState, *, config: RunnableConfig
+) -> Dict[str, Any]:
     """
     Break user query into chunks, if appropriate.
     """
@@ -40,4 +44,9 @@ async def planner(state: InputState) -> Dict[str, Any]:
     }
 
 
+async def cypher_query(
+        state, *, config: RunnableConfig
+):
+    pass
 
+    # step 2.验证生成的 Cypher 查询语句是否正确

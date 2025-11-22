@@ -1,8 +1,9 @@
+from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
-from typing import Callable, Generator
+from typing import Callable, Generator, AsyncGenerator
 
 from langchain_neo4j import Neo4jGraph
-from neo4j import GraphDatabase, Session, Driver
+from neo4j import GraphDatabase, Session, AsyncGraphDatabase, AsyncSession
 
 from app.core.loader import load_yaml_config
 
@@ -16,32 +17,31 @@ driver = GraphDatabase.driver(
     connection_acquisition_timeout=30,
 )
 
+async_driver = AsyncGraphDatabase.driver(
+    uri=neo4j_conf["URI"],
+    auth=(neo4j_conf["USERNAME"], neo4j_conf["PASSWORD"]),
+    max_connection_lifetime=3600,
+    max_connection_pool_size=50,
+    connection_acquisition_timeout=30,
+)
+
 
 def get_neo4j_graph() -> Neo4jGraph:
-    """
-    创建并返回一个Neo4jGraph实例，使用配置文件中的设置。
-
-    Returns:
-        Neo4jGraph: 配置好的Neo4j图数据库连接实例
-    """
-
-    try:
-        # 创建Neo4j图实例
-        neo4j_graph = Neo4jGraph(
-            url=neo4j_conf["URI"],
-            username=neo4j_conf["USERNAME"],
-            password=neo4j_conf["PASSWORD"],
-            database=neo4j_conf["DATABASE"]
-        )
-        return neo4j_graph
-    except Exception as e:
-        # 创建driver失败
-        raise e
+    return Neo4jGraph(
+        url=neo4j_conf["URI"],
+        username=neo4j_conf["USERNAME"],
+        password=neo4j_conf["PASSWORD"],
+        database=neo4j_conf["DATABASE"]
+    )
 
 
 def _get_session() -> Session:
     """统一管理 session 创建，方便后续扩展."""
     return driver.session(database=neo4j_conf["DATABASE"])
+
+
+async def _get_async_session() -> AsyncSession:
+    return async_driver.session(database=neo4j_conf["DATABASE"])
 
 
 def with_session(func: Callable):
@@ -61,7 +61,48 @@ def with_session(func: Callable):
     return wrapper
 
 
-def get_neo4j_session() -> Generator[Session, None, None]:
+@contextmanager
+def get_session():
+    session: Session = _get_session()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@asynccontextmanager
+async def get_async_session():
+    session: AsyncSession = await _get_async_session()
+    try:
+        yield session
+    finally:
+        await session.close()
+
+
+def with_async_session(func: Callable):
+    """异步函数注入异步 session"""
+
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        session = await _get_async_session()
+        try:
+            return await func(session, *args, **kwargs)
+        finally:
+            await session.close()
+
+    return wrapper
+
+
+async def fast_get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """异步 FastAPI 依赖注入"""
+    session = await _get_async_session()
+    try:
+        yield session
+    finally:
+        await session.close()
+
+
+def fast_get_session() -> Generator[Session, None, None]:
     """
     FastAPI 路由依赖注入:
 
