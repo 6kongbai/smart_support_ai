@@ -1,5 +1,7 @@
 import operator
-from typing import TypedDict, Optional, List, Annotated
+from typing import List
+
+from typing_extensions import Annotated, TypedDict
 
 
 class InputState(TypedDict):
@@ -14,6 +16,5 @@ class OverallState(TypedDict):
     llm_validation: bool
 
 
-# 3. 输出状态：workflow.invoke() 最终返回的数据
 class OutputState(TypedDict):
     cypher: str

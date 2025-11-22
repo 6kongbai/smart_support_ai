@@ -45,3 +45,6 @@ log/
 
 # langgraph
 .langgraph_api/
+
+# Test
+test

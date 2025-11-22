@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -12,9 +12,9 @@ class Property(BaseModel):
         description="The label of the node to which this property belongs."
     )
     property_key: str = Field(description="The key of the property being filtered.")
-    property_value: str = Field(
-        description="The value that the property is being matched against.",
-        coerce_numbers_to_str=True,
+
+    property_value: Union[int, float, bool, str, None] = Field(
+        description="The literal value found in the query."
     )
 
 

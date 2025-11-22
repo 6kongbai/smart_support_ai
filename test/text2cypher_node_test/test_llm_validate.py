@@ -1,13 +1,49 @@
+import asyncio
+
 import pytest
 from langgraph.types import Command
+
+from app.db.neo4j.utils import get_structured_schema
 from app.text2cypher.nodes import validate_cypher_with_llm
-from app.text2cypher.types import Property
-from app.text2cypher.utils import should_validate_property
+from app.text2cypher.types import Property, ValidateCypherOutput
+from app.text2cypher.utils import should_validate_property, check_value_exists_async, get_schema_type, \
+    _valid_props_by_label, get_validate_cypher_chain
+
+
+async def test_chain():
+    validate_cypher_chain = get_validate_cypher_chain()
+    llm_output: ValidateCypherOutput = await validate_cypher_chain.ainvoke(
+        {
+            "question": "查一下商品ID是34的产品名称",
+            "cypher": "MATCH (p:Product) WHERE p.ProductID = 34 RETURN p.ProductName",
+        }
+    )
+    print(llm_output)
+
+
+async def test_validata_property():
+    mapping_errors = []
+    filters = [Property(node_label='Product', property_key='ProductID', property_value=34)]
+    target_filters = [
+        f for f in filters
+        if should_validate_property(f.node_label, f.property_key)
+    ]
+    if target_filters:
+        validation_tasks = [check_value_exists_async(f) for f in target_filters]
+
+        if validation_tasks:
+            results = await asyncio.gather(*validation_tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, str):
+                    mapping_errors.append(res)
+    print(mapping_errors)
 
 
 def test_should_validate_property():
     p = Property(node_label='Product', property_key='ProductID', property_value='666666')
     print(should_validate_property("Product", "ProductID"))
+    print(_valid_props_by_label().get("Product").get("ProductID"))
+
 
 # 你需要保证库里确实有 ProductID=101
 POSITIVE_CASES = [

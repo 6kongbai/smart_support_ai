@@ -15,7 +15,7 @@ from app.text2cypher.utils import get_cypher_generation_chain, WRITE_CLAUSES_REG
 
 
 async def generation_cypher(
-        state: InputState, *, config: RunnableConfig
+        state: InputState, config: RunnableConfig
 ) -> Command[Literal["validate_cypher"]]:
     cypher_generation_chain = get_cypher_generation_chain()
 
@@ -31,8 +31,8 @@ async def generation_cypher(
 
 
 async def validate_cypher(
-        state: OverallState, *, config: RunnableConfig
-) -> Command[Literal["validate_cypher_with_llm", "validate_cypher_with_schema"]]:
+        state: OverallState, config: RunnableConfig
+) -> Command[Literal["validate_cypher_with_llm", "validate_cypher_with_schema", "correction_cypher"]]:
     original_cypher = state["cypher"]
     errors = list()
 
@@ -40,12 +40,13 @@ async def validate_cypher(
     corrector = get_corrector()
     cypher = corrector(original_cypher)
     if cypher != original_cypher:
-        logger.error(f"Cypher Query Corrected: {original_cypher} -> {cypher}")
+        logger.warning(f"Cypher Auto-Corrected: {original_cypher} -> {cypher}")
 
     # --- Step 2: 安全检查 (Security Check) ---
     if match := WRITE_CLAUSES_REGEX.search(cypher):
-        errors.append(f"Security Alert: Cypher contains restricted write clause '{match.group(1).upper()}'")
-        logger.error(errors[-1])
+        msg = f"Security Alert: Cypher contains restricted write clause '{match.group(1).upper()}'"
+        errors.append(msg)
+        logger.error(msg)
 
     # --- Step 3: 语法检查 (Syntax Check via EXPLAIN) ---
     try:
@@ -60,27 +61,29 @@ async def validate_cypher(
         errors.append(f"Execution Error: {str(e)}")
         logger.error(errors[-1])
 
-    # --- Step 4: 路由决策 (Routing) ---
-    update_payload = {
-        "errors": errors,
-        "cypher": cypher,
-    }
+    if errors:
+        return Command(
+            goto="correction_cypher",
+            update={
+                "errors": errors,  # 更新状态中的错误信息
+                "cypher": cypher,  # 更新可能被 Auto-corrector 修改过的 Cypher
+            }
+        )
 
-    if state.get("llm_validation", False):
-        return Command(
-            goto="validate_cypher_with_llm",
-            update=update_payload
-        )
-    else:
-        return Command(
-            goto="validate_cypher_with_schema",
-            update=update_payload
-        )
+    # --- Step 4: 路由决策 (Routing) ---
+    # 如果没有语法错误，进入 Schema/语义 验证阶段
+    target_node = "validate_cypher_with_llm" if state.get("llm_validation", False) else "validate_cypher_with_schema"
+    return Command(
+        goto=target_node,
+        update={
+            "cypher": cypher,
+        }
+    )
 
 
 async def validate_cypher_with_llm(
-        state: OverallState, *, config: RunnableConfig
-) -> Command[Literal["correction_cypher", "__end__"]]:
+        state: OverallState, config: RunnableConfig
+) -> Command[Literal["__end__", "correction_cypher"]]:
     errors: List[str] = []
     mapping_errors: List[str] = []
 
@@ -90,6 +93,7 @@ async def validate_cypher_with_llm(
             "question": state["question"],
             "cypher": state["cypher"],
         }
+        , config=config
     )
     if llm_output.errors:
         errors.extend(llm_output.errors)
@@ -133,29 +137,40 @@ async def validate_cypher_with_llm(
         logger.info("无错误")
         return Command(
             goto="__end__",  # 应该跳转到执行 Cypher 的节点，或者结束
+            update={"errors": []}
         )
 
 
 async def validate_cypher_with_schema(
-        state: OverallState, *, config: RunnableConfig
-):
-    pass
+        state: OverallState, config: RunnableConfig
+) -> Command[Literal["correction_cypher", "__end__"]]:
+    logger.info("使用静态 Schema 验证 (Pass-through)")
+    # TODO: 在这里实现基于 driver.session().execute_read() 获取 schema 的对比逻辑
+
+    return Command(
+        goto="__end__"
+    )
 
 
 async def correction_cypher(
-        state: OverallState, *, config: RunnableConfig
+        state: OverallState, config: RunnableConfig
 ) -> Command[Literal["__end__"]]:
     correct_cypher_chain = get_correct_cypher_chain()
-    corrected_cypher_update = await correct_cypher_chain.ainvoke(
+    corrected_cypher = await correct_cypher_chain.ainvoke(
         {
             "question": state.get("question"),
             "errors": state.get("errors"),
             "cypher": state.get("cypher"),
         }
+        , config=config
     )
+
+    logger.info(f"修复后的 Cypher: {corrected_cypher}")
+
     return Command(
         goto="__end__",
         update={
-            "cypher": corrected_cypher_update,
+            "cypher": corrected_cypher,
+            "errors": [],
         }
     )

@@ -1,6 +1,6 @@
 import re
 from functools import cache
-from typing import List, Iterator, Optional, Dict, Set
+from typing import List, Iterator, Optional, Dict, Set, Literal
 
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
@@ -34,10 +34,10 @@ def format_cypher(docs: List[Document]) -> Iterator[str]:
 
 
 @cache
-def _valid_props_by_label() -> Dict[str, Set[str]]:
+def _valid_props_by_label() -> Dict[str, dict[str, str]]:
     node_props = get_structured_schema().get("node_props", {})
     return {
-        label: {p.get("property") for p in props if "property" in p}
+        label: {p.get("property"): p.get("type") for p in props if "property" in p}
         for label, props in node_props.items()
     }
 
@@ -46,24 +46,44 @@ def should_validate_property(label: str, key: str) -> bool:
     return key in _valid_props_by_label().get(label, set())
 
 
+def get_schema_type(
+        label: str, key: str
+) -> Literal["STRING", "INTEGER", "FLOAT", "BOOLEAN", "NULL"] | None:
+    return _valid_props_by_label().get(label, {}).get(key, None)
+
+
 async def check_value_exists_async(filter_item: Property) -> Optional[str]:
     """
     使用原生 AsyncSession 检查属性值是否存在。
     """
+    expected_type = get_schema_type(filter_item.node_label, filter_item.property_key)
+
+    final_value = filter_item.property_value
+
+    # --- 关键：类型对齐逻辑 ---
+    if expected_type == "INTEGER" and isinstance(final_value, str):
+        if final_value.isdigit():
+            final_value = int(final_value)
+        else:
+            return f"Type Mismatch: Expected INTEGER for {filter_item.property_key}, got non-digit string."
+
+    elif expected_type == "STRING" and isinstance(final_value, (int, float)):
+        final_value = str(final_value)
+
     cypher_query = (
-        f"MATCH (n:`{filter_item.node_label}`) "
+        f"MATCH (n:{filter_item.node_label}) "
         f"WHERE n.{filter_item.property_key} = $value "
         f"RETURN 1 LIMIT 1"
     )
 
     try:
         async with get_async_session() as session:
-            result = await session.run(cypher_query, value=filter_item.property_value)
+            result = await session.run(cypher_query, value=final_value)
             record = await result.peek()
             if not record:
                 return (
                     f"Missing value mapping for {filter_item.node_label} "
-                    f"on property {filter_item.property_key} with value '{filter_item.property_value}'"
+                    f"on property {filter_item.property_key} with value {filter_item.property_value}"
                 )
             return None
 
