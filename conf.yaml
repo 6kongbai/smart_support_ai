@@ -3,6 +3,7 @@ DEFAULTS:
   REASONING: deepseek-reasoner
   EMBEDDING: text-embedding-v4
   ROUTER: router-lite
+  FUNCTION_CALL: function-calling
 
 PROVIDERS:
   DASHSCOPE:
@@ -16,6 +17,10 @@ PROVIDERS:
   DEEPSEEK:
     BASE_URL: $DEEPSEEK_BASE_URL
     API_KEY: $DEEPSEEK_API_KEY
+
+  GEMINI:
+    BASE_URL: $GEMINI_BASE_URL
+    API_KEY: $GEMINI_API_KEY
 
 
 MODELS:
@@ -43,6 +48,12 @@ MODELS:
     PROVIDER: OPENAI
     MODEL_NAME: "gpt-5.1"
     temperature: 0
+
+  function-calling:
+      TYPE: "chat"
+      PROVIDER: OPENAI
+      MODEL_NAME: "gpt-5.1"
+      temperature: 0.1
 
   # --- Embedding ---
   text-embedding-v4:

@@ -1,12 +1,16 @@
-from typing import List, Dict, Any
+from typing import Literal
 
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser, PydanticToolsParser
 from langchain_core.runnables import RunnableSerializable
+from langgraph.types import Command
 from pydantic import BaseModel
 
-from app.graphrag.prompts import create_planner_prompt_template, create_summarization_prompt_template
-from app.graphrag.types import PlannerOutput
-from app.llms.llm import get_router_model, get_chat_model
+from app.graphrag.prompts import create_planner_prompt_template, create_summarization_prompt_template, \
+    create_tool_selection_prompt_template
+from app.graphrag.state import TaskState
+from app.graphrag.tools import tools
+from app.graphrag.types import PlannerOutput, TaskResult
+from app.llms.llm import get_router_model, get_chat_model, get_function_call_model
 
 
 def get_planner_chain() -> RunnableSerializable[dict, BaseModel]:
@@ -21,20 +25,31 @@ def get_summarize_chain() -> RunnableSerializable[dict, str]:
     return prompt | llm | StrOutputParser()
 
 
-def sanitize_neo4j_result(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def get_tool_selection_chain() -> RunnableSerializable[dict, BaseModel]:
+    llm = get_function_call_model()
+    prompt = create_tool_selection_prompt_template()
+    return prompt | llm.bind_tools(tools, tool_choice="any", parallel_tool_calls=False) | PydanticToolsParser(
+        tools=tools, first_tool_only=True)
+
+
+def create_result_command(
+        state: TaskState,
+        answer: str,
+        status: Literal["completed", "failed"],
+        tool: str = ""
+) -> Command[Literal["summarize"]]:
     """
-    清洗 Neo4j 数据，将复杂对象转为字符串，确保后续 LLM 能处理且可被 JSON 序列化。
+    辅助函数：统一构建返回的 Command 对象，减少代码重复。
     """
-    # 这里是一个简单的示例，实际项目中可能需要处理 neo4j.time.DateTime 等类型
-    # 或者直接使用 json.dumps(data, default=str) 的逻辑
-    sanitized = []
-    for record in data:
-        new_record = {}
-        for k, v in record.items():
-            # 将非基础类型强转为字符串，防止 datetime/node 对象导致后续序列化报错
-            if not isinstance(v, (str, int, float, bool, list, dict, type(None))):
-                new_record[k] = str(v)
-            else:
-                new_record[k] = v
-        sanitized.append(new_record)
-    return sanitized
+    return Command(
+        goto="summarize",
+        update={
+            "results": [TaskResult(
+                id=state["id"],
+                question=state["question"],
+                answer=answer,
+                tool=tool if tool else state["target_tool"],
+                status=status
+            )]
+        }
+    )

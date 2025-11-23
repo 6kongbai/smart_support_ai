@@ -1,51 +1,48 @@
-from typing import Annotated, List, Literal
+from typing import List, TypedDict, Literal, Dict
 
 from pydantic import BaseModel, Field
 
 
-class Task(BaseModel):
-    """
-    表示一个从复杂用户查询中分解出的独立子任务。
-    它是 Agent 在 Knowledge Graph (知识图谱) 中执行操作的基本单元。
-    """
-    question: Annotated[
-        str,
-        Field(
-            description="该子任务需要回答的具体问题或执行的操作，必须是完整的句子。"
-        )
-    ]
+class TaskResult(TypedDict):
+    # 任务ID
+    id: str
+    # 任务问题
+    question: str
+    # 任务结果
+    answer: str
+    # 使用的工具
+    tool: str
+    # 状态
+    status: Literal["completed", "failed"]
 
-    parent_task: Annotated[
-        str,
-        Field(
-            description="派生出该子任务的原始用户查询或父任务的完整文本。"
-        )
-    ]
 
-    status: Annotated[
-        Literal["pending", "in_progress", "completed", "failed"],
-        Field(
-            default="pending",
-            description="任务的当前执行状态。'pending' (待处理), 'in_progress' (处理中), 'completed' (已完成), 'failed' (失败)."
-        )
-    ]
+class SubTask(BaseModel):
+    """单个子任务的定义：包含具体问题和对应的处理工具"""
 
-    record: Annotated[
-        str,
-        Field(
-            default="",
-            description="用于承载该任务在执行过程中产生的中间数据或 Cypher 查询结果。"
-        )
-    ]
+    sub_query: str = Field(
+        ...,
+        description="拆解后、去指代、独立完整的子查询语句。"
+    )
+
+    selected_tool: Literal["text2cypher", "predefined_cypher", "web_search"] = Field(
+        ...,
+        description="根据预设规则为该子任务选择的最优工具。"
+    )
 
 
 class PlannerOutput(BaseModel):
     """
-    由任务规划组件 (Planner Agent) 生成的结构化输出。
-    它包含了一组用于解决原始用户查询的独立且不重复的子任务列表。
+    任务规划器的输出。
+    包含一系列有序的子任务，每个子任务都绑定了特定的工具。
     """
 
-    tasks: List[Task] = Field(
-        default=[],
-        description="解决用户原始查询所需完成的独立且不重复的子任务列表。如果原始问题很简单，该列表将只包含一个任务（即原问题）。"
+    # 增加一个思考字段，让模型在生成列表前先通过 CoT 提升准确率
+    reasoning: str = Field(
+        ...,
+        description="简要分析用户的意图，解释为什么需要这样拆解以及为什么选择这些工具。"
+    )
+
+    tasks: List[SubTask] = Field(
+        ...,
+        description="分解并路由后的任务列表。"
     )

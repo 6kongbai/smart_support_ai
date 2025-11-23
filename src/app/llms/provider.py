@@ -4,6 +4,7 @@ from typing import Dict, Any, Callable
 from langchain_community.embeddings import DashScopeEmbeddings
 # Chat Models
 from langchain_deepseek import ChatDeepSeek
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from app.llms.dashscope import ChatDashscope
 
@@ -80,9 +81,18 @@ def create_deepseek_chat(conf):
 def create_openai_chat(conf):
     return ChatOpenAI(
         model_name=_get_real_model_name(conf),
-        api_key=conf["API_KEY"],
-        base_url=conf.get("BASE_URL"),
+        openai_api_key=conf["API_KEY"],
+        openai_api_base=conf.get("BASE_URL"),
         max_retries=conf.get("MAX_RETRIES", 3),
+        **_clean_params(conf)
+    )
+
+
+@register_chat("gemini")
+def create_gemini_chat(conf):
+    return ChatGoogleGenerativeAI(
+        model=_get_real_model_name(conf),
+        google_api_key=conf["API_KEY"],
         **_clean_params(conf)
     )
 

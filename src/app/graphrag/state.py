@@ -1,9 +1,9 @@
-from operator import add
+import operator
 from typing import Annotated, List
 
 from typing_extensions import TypedDict
 
-from app.graphrag.types import Task
+from app.graphrag.types import TaskResult
 
 
 class InputState(TypedDict):
@@ -15,7 +15,8 @@ class OverallState(TypedDict):
     """The main state in multi-agent workflows."""
 
     question: str
-    tasks: Annotated[List[Task], add]
+    results: Annotated[List[TaskResult], operator.add]
+    plans: List[str]
     summary: str
     answer: str
 
@@ -26,4 +27,10 @@ class OutputState(TypedDict):
 
 
 class TaskState(TypedDict):
-    task: Task
+    """
+    表示一个从复杂用户查询中分解出的独立子任务。
+    它是 Agent 在 Knowledge Graph (知识图谱) 中执行操作的基本单元。
+    """
+    id: str
+    question: str
+    target_tool: str

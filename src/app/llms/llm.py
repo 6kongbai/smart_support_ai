@@ -73,3 +73,9 @@ def get_router_model() -> BaseChatModel:
     对应的 YAML 配置 'router-lite' 中已包含 temperature: 0。
     """
     return _get_model_instance("ROUTER", expected_type="chat")
+
+def get_function_call_model() -> BaseChatModel:
+    """
+    获取函数调用模型。
+    """
+    return _get_model_instance("FUNCTION_CALL", expected_type="chat")
