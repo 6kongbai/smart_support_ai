@@ -1,10 +1,10 @@
 import pytest
 
-from app.text2cypher.builder import build_graph
+from app.text2cypher.builder import build_text2pycher_agent
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_graph():
-    graph = build_graph()
+    graph = build_text2pycher_agent()
 
     # 1. 准备输入：LangGraph 推荐直接使用普通字典
     inputs = {

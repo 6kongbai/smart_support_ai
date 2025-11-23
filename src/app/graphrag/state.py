@@ -16,10 +16,14 @@ class OverallState(TypedDict):
 
     question: str
     tasks: Annotated[List[Task], add]
-    next: str
+    summary: str
     answer: str
 
 
 class OutputState(TypedDict):
     """The final output for multi-agent workflows."""
     answer: str
+
+
+class TaskState(TypedDict):
+    task: Task

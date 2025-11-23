@@ -67,6 +67,7 @@ async def validate_cypher(
             update={
                 "errors": errors,  # 更新状态中的错误信息
                 "cypher": cypher,  # 更新可能被 Auto-corrector 修改过的 Cypher
+                "status": "failed"
             }
         )
 
@@ -121,6 +122,7 @@ async def validate_cypher_with_llm(
             goto="__end__",
             update={
                 "errors": final_errors,  # 将所有错误传递给最终回复生成器
+                "status": "data_no_exist",
             }
         )
 
@@ -130,6 +132,7 @@ async def validate_cypher_with_llm(
             goto="correction_cypher",
             update={
                 "errors": errors,
+                "status": "failed",
             }
         )
 
@@ -137,7 +140,10 @@ async def validate_cypher_with_llm(
         logger.info("无错误")
         return Command(
             goto="__end__",  # 应该跳转到执行 Cypher 的节点，或者结束
-            update={"errors": []}
+            update={
+                "errors": [],
+                "status": "success",
+            }
         )
 
 
@@ -149,6 +155,10 @@ async def validate_cypher_with_schema(
 
     return Command(
         goto="__end__"
+        , update={
+            "errors": [],
+            "status": "success",
+        }
     )
 
 
@@ -172,5 +182,6 @@ async def correction_cypher(
         update={
             "cypher": corrected_cypher,
             "errors": [],
+            "status": "success",
         }
     )

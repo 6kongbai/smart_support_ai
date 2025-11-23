@@ -28,7 +28,7 @@ def _build_base_graph():
     return builder
 
 
-def build_graph():
+def build_text2pycher_agent():
     """Build and return the agent workflow graph without memory."""
     # build state graph
     builder = _build_base_graph()
@@ -36,5 +36,5 @@ def build_graph():
 
 
 if __name__ == '__main__':
-    graph = build_graph()
+    graph = build_text2pycher_agent()
     print(graph.get_graph().draw_mermaid())

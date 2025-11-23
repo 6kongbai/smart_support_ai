@@ -8,7 +8,8 @@ from app.llms.llm import get_chat_model
 
 # 定义用户输入：
 examples = [
-    "USER INPUT: 'Which actors starred in the Matrix?' QUERY: MATCH (p:Person)-[:ACTED_IN]->(m:Movie) WHERE m.title = 'The Matrix' RETURN p.name"
+    "USER INPUT: '查一下订单O17的物流公司是哪个?' QUERY: MATCH (o:Order)-[:SHIPPED_VIA]->(s:Shipper) WHERE o.OrderID = 'O17' RETURN s.CompanyName",
+    "USER INPUT: '查一下订单O17的物流公司电话号码' QUERY: MATCH (o:Order)-[:SHIPPED_VIA]->(s:Shipper) WHERE o.OrderID = 'O17' RETURN s.Phone",
 ]
 
 # 初始化检索器

@@ -1,17 +1,6 @@
-from operator import add
-from typing import Annotated, Any, Dict, List, Literal, Optional
+from typing import Annotated, List, Literal
 
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
-
-
-class CypherOutputState(TypedDict):
-    task: Annotated[list, add]
-    statement: str
-    parameters: Optional[Dict[str, Any]]
-    errors: List[str]
-    records: List[Dict[str, Any]]
-    steps: List[str]
 
 
 class Task(BaseModel):
@@ -41,10 +30,10 @@ class Task(BaseModel):
         )
     ]
 
-    data: Annotated[
-        Optional[CypherOutputState],
+    record: Annotated[
+        str,
         Field(
-            default=None,
+            default="",
             description="用于承载该任务在执行过程中产生的中间数据或 Cypher 查询结果。"
         )
     ]

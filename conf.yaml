@@ -40,8 +40,8 @@ MODELS:
   # --- 路由专用配置 (特殊配置) ---
   router-lite:
     TYPE: "chat"
-    PROVIDER: DEEPSEEK
-    MODEL_NAME: "deepseek-chat"
+    PROVIDER: OPENAI
+    MODEL_NAME: "gpt-5.1"
     temperature: 0
 
   # --- Embedding ---

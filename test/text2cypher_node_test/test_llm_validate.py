@@ -3,19 +3,20 @@ import asyncio
 import pytest
 from langgraph.types import Command
 
-from app.db.neo4j.utils import get_structured_schema
 from app.text2cypher.nodes import validate_cypher_with_llm
 from app.text2cypher.types import Property, ValidateCypherOutput
-from app.text2cypher.utils import should_validate_property, check_value_exists_async, get_schema_type, \
-    _valid_props_by_label, get_validate_cypher_chain
+from app.text2cypher.utils import should_validate_property, check_value_exists_async, _valid_props_by_label, \
+    get_validate_cypher_chain
 
 
 async def test_chain():
     validate_cypher_chain = get_validate_cypher_chain()
     llm_output: ValidateCypherOutput = await validate_cypher_chain.ainvoke(
         {
-            "question": "查一下商品ID是34的产品名称",
-            "cypher": "MATCH (p:Product) WHERE p.ProductID = 34 RETURN p.ProductName",
+            "question": "查一下订单O17的物流公司是哪个",
+            "cypher": """MATCH (o:Order)-[:SHIPPED_VIA]->(s:Shipper)
+WHERE o.OrderID = 'O17'
+RETURN s.CompanyName""",
         }
     )
     print(llm_output)
@@ -40,9 +41,7 @@ async def test_validata_property():
 
 
 def test_should_validate_property():
-    p = Property(node_label='Product', property_key='ProductID', property_value='666666')
-    print(should_validate_property("Product", "ProductID"))
-    print(_valid_props_by_label().get("Product").get("ProductID"))
+    print(_valid_props_by_label().get("Order").get("OrderDate"))
 
 
 # 你需要保证库里确实有 ProductID=101

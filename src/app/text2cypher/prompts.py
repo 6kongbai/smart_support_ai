@@ -57,26 +57,25 @@ def create_text2cypher_validation_prompt_template() -> ChatPromptTemplate:
             {schema}
         </schema>
         
-        你必须执行以下三个核心分析步骤：
+        ## 你必须执行以下三个核心分析步骤：
 
-        ### 1. 语法与逻辑审计
-        * 检查括号匹配、变量作用域、关键字拼写。
-        * 确认查询逻辑是否能直接回答用户的自然语言问题。
-
-        ### 2. Schema 一致性检查
-        * 验证查询中使用的所有 **节点标签 (Labels)** 是否存在于 Schema 中。
-        * 验证查询中使用的所有 **关系类型 (Relationship Types)** 是否存在于 Schema 中。
-        * 验证查询中使用的所有 **属性键 (Property Keys)** 是否归属于正确的节点或关系。
+        ### Step 1. 语法审计 (Syntax Audit)
+        仅检查**Cypher 语法层面**是否正确，包括：
+        - 括号/引号是否匹配
+        - 变量是否已定义并在作用域内使用
+        - 可以存在取别名之类的
+        
+        ### Step 2. Schema 一致性检查
+        只依据给定 Schema 检查：
+        - 所有节点标签 Label 是否存在
+        - 所有关系类型 Relationship Type 是否存在且方向正确
+        - 所有属性 Property Key 是否存在于对应标签/关系上
         
         ### 3. 过滤器提取 (Filter Extraction)
         * 识别查询中用于**缩小搜索范围**的所有特定属性条件（在 MATCH 或 WHERE 子句中）。
         * 提取这些条件，以便后续进行数据库值的存在性检查。
         * 例如：`MATCH (n:Person [name: 'Alice'])` -> 提取为 Label: Person, Key: name, Value: 'Alice'。
         * 例如：`WHERE n.status = 'Active'` -> 提取为 Label: [n的标签], Key: status, Value: 'Active'。
-        
-        ### 示例 (Few-Shot Learning)
-        Cypher: `MATCH (p:Product) WHERE p.id = 999999 RETURN p`
-        分析: Schema 中 id 是 INTEGER，Cypher 使用了 INTEGER (999999)。语法正确。
         """
 
     human_template = """

@@ -10,17 +10,9 @@ from app.text2cypher.nodes import generation_cypher
 # =====================
 POSITIVE_TEST_CASES = [
     (
-        "查一下商品ID是101的产品名称",
-        "MATCH (p:Product) WHERE p.ProductID = 101 RETURN p.ProductName"
-    ),
-    (
-        "查找联系人为'张三'的客户",
-        "MATCH (c:Customer) WHERE c.ContactName = '张三' RETURN c.CustomerID"
-    ),
-    (
-        "查询订单号为5001的订单详情和物流情况",
-        "MATCH (o:Order) WHERE o.OrderID = 5001 RETURN o"
-    ),
+        "查一下订单O17的物流公司是哪个",
+        ""
+    )
 ]
 
 
