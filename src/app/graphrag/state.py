@@ -3,7 +3,7 @@ from typing import Annotated, List
 
 from typing_extensions import TypedDict
 
-from app.graphrag.types import TaskResult
+from app.graphrag.types import TaskResult, Task
 
 
 class InputState(TypedDict):
@@ -16,7 +16,7 @@ class OverallState(TypedDict):
 
     question: str
     results: Annotated[List[TaskResult], operator.add]
-    plans: List[str]
+    tasks: List[Task]
     summary: str
     answer: str
 

@@ -1,16 +1,21 @@
 from typing import Literal
 
-from langchain_core.output_parsers import StrOutputParser, PydanticToolsParser
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableSerializable
 from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.graphrag.prompts import create_planner_prompt_template, create_summarization_prompt_template, \
-    create_tool_selection_prompt_template
+    create_predefined_cypher_prompt_template
 from app.graphrag.state import TaskState
-from app.graphrag.tools import tools
-from app.graphrag.types import PlannerOutput, TaskResult
-from app.llms.llm import get_router_model, get_chat_model, get_function_call_model
+from app.graphrag.types import PlannerOutput, TaskResult, TemplateDecision
+from app.llms.llm import get_router_model, get_chat_model
+
+TOOL_NODE_MAPPING = {
+    "text2cypher": "text2cypher_query",  # LLM输出名 : Graph节点名
+    "predefined_cypher": "predefined_cypher_query",
+    "web_search": "network_query"
+}
 
 
 def get_planner_chain() -> RunnableSerializable[dict, BaseModel]:
@@ -25,12 +30,10 @@ def get_summarize_chain() -> RunnableSerializable[dict, str]:
     return prompt | llm | StrOutputParser()
 
 
-def get_tool_selection_chain() -> RunnableSerializable[dict, BaseModel]:
-    llm = get_function_call_model()
-    prompt = create_tool_selection_prompt_template()
-    return prompt | llm.bind_tools(tools, tool_choice="any", parallel_tool_calls=False) | PydanticToolsParser(
-        tools=tools, first_tool_only=True)
-
+def get_predefined_cypher_chain():
+    llm = get_router_model()
+    prompt = create_predefined_cypher_prompt_template()
+    return prompt | llm.with_structured_output(TemplateDecision)
 
 def create_result_command(
         state: TaskState,

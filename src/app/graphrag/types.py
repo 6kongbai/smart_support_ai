@@ -1,6 +1,16 @@
-from typing import List, TypedDict, Literal, Dict
+from typing import List, TypedDict, Literal, Dict, Any, Union
 
 from pydantic import BaseModel, Field
+
+
+class TemplateDecision(BaseModel):
+    """预定义查询的决策结果"""
+    template_id: str = Field(..., description="从注册表中选择的最匹配的模版ID")
+    parameters: Dict[str, Union[str, int, float]] = Field(
+        ...,
+        description="提取的查询参数。",
+    )
+    reasoning: str = Field(..., description="选择该模版的理由")
 
 
 class TaskResult(TypedDict):
@@ -16,7 +26,7 @@ class TaskResult(TypedDict):
     status: Literal["completed", "failed"]
 
 
-class SubTask(BaseModel):
+class Task(BaseModel):
     """单个子任务的定义：包含具体问题和对应的处理工具"""
 
     sub_query: str = Field(
@@ -42,7 +52,7 @@ class PlannerOutput(BaseModel):
         description="简要分析用户的意图，解释为什么需要这样拆解以及为什么选择这些工具。"
     )
 
-    tasks: List[SubTask] = Field(
+    tasks: List[Task] = Field(
         ...,
         description="分解并路由后的任务列表。"
     )

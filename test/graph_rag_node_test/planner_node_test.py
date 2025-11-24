@@ -3,5 +3,6 @@ from app.graphrag.state import InputState
 
 
 async def test_planner():
-    state = InputState(question="北风商贸有哪些饮料类产品？它们的价格是多少？")
+    state = InputState(question="我的快递单号是 SF123456，帮我查查到哪了？另外如果想退货的话政策是什么？")
     res = await planner(state, config={})
+    print(res)

@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
+from app.graphrag.tools import CYPHER_TEMPLATES
 from app.prompts.template import get_prompt_template
 
 
@@ -52,7 +53,13 @@ def create_summarization_prompt_template() -> ChatPromptTemplate:
     )
 
 
-def create_tool_selection_prompt_template() -> ChatPromptTemplate:
+_template_desc_str = "\n".join(
+    [f"- {k}: {v.description} (必填参数: {v.required_params})"
+     for k, v in CYPHER_TEMPLATES.items()]
+)
+
+
+def create_predefined_cypher_prompt_template() -> ChatPromptTemplate:
     """
     Create a tool selection prompt template.
 
@@ -61,13 +68,22 @@ def create_tool_selection_prompt_template() -> ChatPromptTemplate:
     ChatPromptTemplate
         The prompt template.
     """
-    system_instruction = get_prompt_template("graphrag/tool_selection")
 
-    message = "Question: {question}"
+    system_prompt = """
+        你是一个图数据库查询助手。你的任务是将用户问题映射到以下预定义的 Cypher 模版之一。
 
-    return ChatPromptTemplate.from_messages(
-        [
-            ("system", system_instruction),
-            ("human", message),
-        ]
-    )
+        ### 可用模版列表：
+        {template_desc}
+
+        ### 要求：
+        1. 精确匹配：必须选择语义最接近的 template_id。
+        2. 参数提取：从问题中提取 required_params 指定的实体。如果问题中未提及必要参数，请仔细分析上下文或报错。
+        3. 如果没有匹配的模版，template_id 请填 "NONE"。
+        """
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{question}")
+    ])
+
+    return prompt.partial(template_desc=_template_desc_str)

@@ -1,22 +1,23 @@
 import json
-from typing import Literal, cast, List, Any, Coroutine
+from typing import Literal, cast, Any
 
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command, Send
+from langgraph.types import Command
 from loguru import logger
-from pydantic import BaseModel
 
 from app.db.neo4j.client import get_async_session
 from app.graphrag.state import OverallState, TaskState
-from app.graphrag.types import PlannerOutput, TaskResult
-from app.graphrag.utils import get_planner_chain, get_summarize_chain, create_result_command, get_tool_selection_chain
+from app.graphrag.tools import CYPHER_TEMPLATES
+from app.graphrag.types import PlannerOutput, TemplateDecision
+from app.graphrag.utils import get_planner_chain, get_summarize_chain, create_result_command, \
+    get_predefined_cypher_chain
 from app.text2cypher.builder import build_text2pycher_agent
 from app.text2cypher.state import OutputState as CypherOutput
 
 
 async def planner(
         state: OverallState, *, config: RunnableConfig
-) -> dict[str, list[str]]:
+) -> dict[str, Any]:
     """
     Break user query into chunks, if appropriate.
     """
@@ -29,38 +30,10 @@ async def planner(
         )
     )
 
-    # 日志打印格式，分别打印每个任务
-    logger.info(f"Total Sub Task: {len(planner_output.plans)}")
+    logger.info(f"Planner Reasoning: {planner_output.reasoning}")
+    logger.info(f"Total Sub Tasks: {len(planner_output.tasks)}")
 
-    for i, plan in enumerate(planner_output.plans):
-        logger.info(f"Sub Task[{i + 1}]: {plan}")
-
-    return {"plans": planner_output.plans}
-
-
-async def tool_selection(
-        state: TaskState, *, config: RunnableConfig
-) -> Command[Literal["text2cypher_query", "predefined_cypher_query", "network_query", "customer_query", "summarize"]]:
-    tool_selection_chain = get_tool_selection_chain()
-    tool_selection_output: BaseModel = await tool_selection_chain.ainvoke(
-        {"question": state.get("question", "")}
-    )
-
-    if tool_selection_output is None:
-        return create_result_command(state, "生成查询语句失败", status="failed")
-
-    tool_name: str = tool_selection_output.model_json_schema().get("title", "")
-
-    return Command(
-                goto=Send(
-                    tool_name,
-                    TaskState(
-                        id=state["id"],
-                        question=state["question"],
-                        target_tool=tool_name,
-                    )
-                )
-            )
+    return {"planned_tasks": planner_output.tasks}
 
 
 async def text2cypher_query(
@@ -111,7 +84,62 @@ async def text2cypher_query(
 async def predefined_cypher_query(
         state: TaskState, *, config: RunnableConfig
 ) -> Command[Literal["summarize"]]:
-    pass
+    task_id = state["id"]
+    question = state["question"]
+
+    logger.info(f"[{task_id}] Start Predefined Query: {question}")
+
+    try:
+        chain = get_predefined_cypher_chain()
+
+        # --- Step 1: LLM 模版选择与参数提取 ---
+        decision: TemplateDecision = await chain.ainvoke({"question": question}, config=config)
+
+        if decision.template_id == "NONE" or decision.template_id not in CYPHER_TEMPLATES:
+            raise ValueError(f"无法匹配到预定义模版，意图识别结果: {decision.template_id}")
+
+        # 获取模版详情
+        template_obj = CYPHER_TEMPLATES[decision.template_id]
+        parameters = decision.parameters
+
+        # --- Step 2 : 参数强校验 ---
+        required_params = template_obj.required_params
+        missing_params = [p for p in required_params if p not in parameters or not parameters[p]]
+
+        if missing_params:
+            # 返回明确的错误信息，Agent 收到后可反问用户或自我修正
+            raise ValueError(
+                f"模版 '{decision.template_id}' 缺少必要参数: {missing_params}. "
+                "请检查用户问题中是否提供了相应实体。"
+            )
+
+        logger.info(f"[{task_id}] Selected Template: {decision.template_id} | Params: {parameters}")
+
+        # --- Step 3: 执行数据库查询 ---
+        executed_cypher = template_obj.cypher
+        logger.info(f"[{task_id}] Executing Cypher: {executed_cypher} with {parameters}")
+        async with get_async_session() as session:
+            # 使用提取的参数运行查询
+            result_cursor = await session.run(executed_cypher, parameters)
+            raw_data = await result_cursor.data()
+
+            if not raw_data:
+                result_str = "查询执行成功，但未返回任何结果。"
+            else:
+                result_str = json.dumps(raw_data, ensure_ascii=False, default=str)
+
+    except ValueError as ve:
+        error_msg = f"校验失败: {str(ve)}"
+        logger.warning(f"[{task_id}] Validation Warning: {error_msg}")
+        return create_result_command(state, error_msg, status="failed")
+
+    except Exception as e:
+        error_msg = f"数据库/异步执行失败: {type(e).__name__} - {str(e)}"
+        logger.error(f"[{task_id}] Execution Error: {error_msg}")
+        return create_result_command(state, error_msg, status="failed")
+
+    # --- Step 4: 返回成功结果 ---
+    return create_result_command(state, result_str, status="completed")
 
 
 async def network_query(
