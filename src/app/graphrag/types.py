@@ -3,10 +3,16 @@ from typing import List, TypedDict, Literal, Dict, Any, Union
 from pydantic import BaseModel, Field
 
 
+class Parameter(BaseModel):
+    """参数定义"""
+    name: str = Field(..., description="参数名称")
+    value: Union[str, int, float] = Field(..., description="参数值")
+
+
 class TemplateDecision(BaseModel):
     """预定义查询的决策结果"""
     template_id: str = Field(..., description="从注册表中选择的最匹配的模版ID")
-    parameters: Dict[str, Union[str, int, float]] = Field(
+    parameters: List[Parameter] = Field(
         ...,
         description="提取的查询参数。",
     )

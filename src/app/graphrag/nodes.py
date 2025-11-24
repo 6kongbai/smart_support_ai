@@ -1,5 +1,5 @@
 import json
-from typing import Literal, cast, Any
+from typing import Literal, cast, Any, List, Dict, Union
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
@@ -8,7 +8,7 @@ from loguru import logger
 from app.db.neo4j.client import get_async_session
 from app.graphrag.state import OverallState, TaskState
 from app.graphrag.tools import CYPHER_TEMPLATES
-from app.graphrag.types import PlannerOutput, TemplateDecision
+from app.graphrag.types import PlannerOutput, TemplateDecision, Parameter
 from app.graphrag.utils import get_planner_chain, get_summarize_chain, create_result_command, \
     get_predefined_cypher_chain
 from app.text2cypher.builder import build_text2pycher_agent
@@ -95,19 +95,27 @@ async def predefined_cypher_query(
         # --- Step 1: LLM 模版选择与参数提取 ---
         decision: TemplateDecision = await chain.ainvoke({"question": question}, config=config)
 
+        parameters_list: List[Parameter] = decision.parameters
         if decision.template_id == "NONE" or decision.template_id not in CYPHER_TEMPLATES:
             raise ValueError(f"无法匹配到预定义模版，意图识别结果: {decision.template_id}")
 
         # 获取模版详情
         template_obj = CYPHER_TEMPLATES[decision.template_id]
-        parameters = decision.parameters
+        required_params: List[str] = template_obj.required_params
 
         # --- Step 2 : 参数强校验 ---
-        required_params = template_obj.required_params
-        missing_params = [p for p in required_params if p not in parameters or not parameters[p]]
+        parameters: Dict[str, Union[str, int, float]] = {
+            p.name: p.value
+            for p in parameters_list
+        }
+
+        missing_params = [
+            required_param
+            for required_param in required_params
+            if required_param not in parameters
+        ]
 
         if missing_params:
-            # 返回明确的错误信息，Agent 收到后可反问用户或自我修正
             raise ValueError(
                 f"模版 '{decision.template_id}' 缺少必要参数: {missing_params}. "
                 "请检查用户问题中是否提供了相应实体。"
