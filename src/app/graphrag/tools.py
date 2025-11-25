@@ -259,7 +259,7 @@ MATCH (r:Review)-[:REVIEWS]->(p:Product)
 WITH p.ProductName as ProductName,
      avg(toFloat(r.Rating)) as AvgRating,
      count(r) as ReviewCount
-WHERE ReviewCount > 3
+WHERE ReviewCount >= 3
 RETURN ProductName, AvgRating, ReviewCount
 ORDER BY AvgRating DESC
 LIMIT 10

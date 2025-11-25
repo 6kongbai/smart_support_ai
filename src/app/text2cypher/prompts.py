@@ -73,13 +73,19 @@ def create_text2cypher_validation_prompt_template() -> ChatPromptTemplate:
 
         ### Step 3. 过滤器提取 (Filter Extraction)
         识别查询中用于**筛选节点**的所有属性条件（位于 `MATCH` 的内联属性或 `WHERE` 子句中）。
-
+        
         对于每一个过滤条件，你必须提取以下四要素：
         1. **Node Label**: 必须将变量（如 `n`）解析为它在 MATCH 中定义的实际标签（如 `Person`）。
         2. **Property Key**: 属性名。
         3. **Operator**: 使用的比较操作符。包括：`=`, `<>`, `>`, `<`, `>=`, `<=`, `IN`, `CONTAINS`, `STARTS WITH`, `ENDS WITH`。
         4. **Property Value**: 字面量值。如果是 `IN` 操作符，值应当是一个列表。
-
+        
+        ## **至关重要的输出规则**：
+        1. **errors 字段**：**仅当**发现明确的语法错误或 Schema 不一致时才填写。
+           - 如果 Cypher 是正确的，`errors` **必须** 是一个空列表 `[]`。
+           - **绝对不要** 在 `errors` 里写 "语法正确"、"逻辑通顺" 之类的成功分析报告。
+        2. **filters 字段**：总是提取发现的过滤条件。
+        
         **提取示例：**
         * **Case 1 (精确匹配)**: 
             `MATCH (p:Product {{id: 'P123'}})` 

@@ -1,5 +1,4 @@
 import json
-import uuid
 from typing import Literal, cast, Any, List, Dict, Union
 
 from langchain_core.runnables import RunnableConfig
@@ -12,7 +11,6 @@ from app.graphrag.tools import CYPHER_TEMPLATES
 from app.graphrag.types import PlannerOutput, TemplateDecision, Parameter, TaskResult
 from app.graphrag.utils import get_planner_chain, get_summarize_chain, create_result_command, \
     get_predefined_cypher_chain, get_web_search_agent, get_text2cypher_agent
-from app.text2cypher.builder import build_text2cypher_agent
 from app.text2cypher.state import OutputState as CypherOutput
 
 

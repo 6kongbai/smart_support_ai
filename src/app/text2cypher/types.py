@@ -29,6 +29,10 @@ class ValidateCypherOutput(BaseModel):
     including any errors and applied filters.
     """
 
+    reasoning: Optional[str] = Field(
+        description="A brief explanation of the validation result. If valid, explain why. If invalid, explain the error."
+    )
+
     errors: Optional[List[str]] = Field(
         description="A list of syntax or semantical errors in the Cypher statement. Always explain the discrepancy between schema and Cypher statement"
     )

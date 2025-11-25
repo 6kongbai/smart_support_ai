@@ -18,28 +18,24 @@ from app.llms.llm import get_router_model, get_chat_model
 from app.text2cypher.builder import build_text2cypher_agent
 
 
-@cache
 def get_planner_chain() -> RunnableSerializable[dict, BaseModel]:
     llm = get_router_model()
     prompt = create_planner_prompt_template()
     return prompt | llm.with_structured_output(PlannerOutput)
 
 
-@cache
 def get_summarize_chain() -> RunnableSerializable[dict, str]:
     llm = get_chat_model()
     prompt = create_summarization_prompt_template()
     return prompt | llm | StrOutputParser()
 
 
-@cache
 def get_predefined_cypher_chain():
     llm = get_router_model()
     prompt = create_predefined_cypher_prompt_template()
     return prompt | llm.with_structured_output(TemplateDecision)
 
 
-@cache
 def get_text2cypher_agent():
     return build_text2cypher_agent()
 
