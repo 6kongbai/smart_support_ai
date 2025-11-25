@@ -4,8 +4,12 @@ from langgraph.types import Send
 from loguru import logger
 
 from app.graphrag.state import OverallState, TaskState
-from app.graphrag.utils import TOOL_NODE_MAPPING
 
+TOOL_NODE_MAPPING = {
+    "text2cypher": "text2cypher_query",  # LLM输出名 : Graph节点名
+    "predefined_cypher": "predefined_cypher_query",
+    "web_search": "network_query"
+}
 
 def distribute_tasks(state: OverallState) -> List[Send]:
     tasks = state.get("tasks", [])

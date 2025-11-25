@@ -1,9 +1,20 @@
-import asyncio
+import time
 
 import pytest
-from langgraph.types import Command  # 假设你用了 LangGraph 的 Command
+from langchain_core.example_selectors import MaxMarginalRelevanceExampleSelector
+from langchain_core.runnables import RunnableLambda
+from langgraph.types import Command
 
+from app.db.milvus.client import get_retriever, get_milvus
 from app.text2cypher.nodes import generation_cypher
+from app.text2cypher.utils import get_cypher_generation_chain
+
+
+async def test_retriever():
+    retriever = get_retriever()
+    res = await retriever.ainvoke("查一下订单O17的物流公司是哪个")
+    print(res)
+
 
 # =====================
 # 正向测试用例列表

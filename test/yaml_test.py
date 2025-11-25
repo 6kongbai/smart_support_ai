@@ -6,6 +6,5 @@ from app.core.loader import load_yaml_config
 
 def test_yaml_loader():
     conf = load_yaml_config()
-    print(conf.get("NEO4J"))
-    print(load_yaml_config())
+    print(conf.get("MCP"))
 

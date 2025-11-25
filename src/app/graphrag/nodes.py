@@ -1,4 +1,5 @@
 import json
+import uuid
 from typing import Literal, cast, Any, List, Dict, Union
 
 from langchain_core.runnables import RunnableConfig
@@ -8,10 +9,10 @@ from loguru import logger
 from app.db.neo4j.client import get_async_session
 from app.graphrag.state import OverallState, TaskState
 from app.graphrag.tools import CYPHER_TEMPLATES
-from app.graphrag.types import PlannerOutput, TemplateDecision, Parameter
+from app.graphrag.types import PlannerOutput, TemplateDecision, Parameter, TaskResult
 from app.graphrag.utils import get_planner_chain, get_summarize_chain, create_result_command, \
-    get_predefined_cypher_chain
-from app.text2cypher.builder import build_text2pycher_agent
+    get_predefined_cypher_chain, get_web_search_agent, get_text2cypher_agent
+from app.text2cypher.builder import build_text2cypher_agent
 from app.text2cypher.state import OutputState as CypherOutput
 
 
@@ -33,7 +34,7 @@ async def planner(
     logger.info(f"Planner Reasoning: {planner_output.reasoning}")
     logger.info(f"Total Sub Tasks: {len(planner_output.tasks)}")
 
-    return {"planned_tasks": planner_output.tasks}
+    return {"tasks": planner_output.tasks}
 
 
 async def text2cypher_query(
@@ -41,13 +42,13 @@ async def text2cypher_query(
 ) -> Command[Literal["summarize"]]:
     # Step 1. 生成 Cypher 语句
     try:
-        generate_cypher_agent = build_text2pycher_agent()
+        generate_cypher_agent = get_text2cypher_agent()
         inputs = {
             "question": state["question"],
             "llm_validation": True
         }
 
-        response: CypherOutput = await generate_cypher_agent.invoke(inputs, config)
+        response: CypherOutput = await generate_cypher_agent.ainvoke(inputs, config=config)
 
         if response["status"] == "failed":
             return create_result_command(state, "生成查询语句失败", status="failed")
@@ -62,8 +63,9 @@ async def text2cypher_query(
         return create_result_command(state, f"生成语句时发生系统错误: {str(e)}", status="failed")
 
     # Step 2. 运行 Cypher 并转存为 String
-    async with get_async_session() as session:
-        try:
+
+    try:
+        async with get_async_session() as session:
             result_cursor = await session.run(cypher_query_str)
             # 1. 提取数据到内存 (List[Dict])
             raw_data = await result_cursor.data()
@@ -76,9 +78,9 @@ async def text2cypher_query(
             # Case 4: 数据库查询正常结束 (无论有无数据)
             return create_result_command(state, answer_content, status="completed")
 
-        except Exception as e:
-            logger.exception(f"数据库执行出错: {e}")
-            return create_result_command(state, f"数据库查询执行出错: {str(e)}", status="failed")
+    except Exception as e:
+        logger.exception(f"数据库执行出错: {e}")
+        return create_result_command(state, f"数据库查询执行出错: {str(e)}", status="failed")
 
 
 async def predefined_cypher_query(
@@ -153,7 +155,20 @@ async def predefined_cypher_query(
 async def network_query(
         state: TaskState, *, config: RunnableConfig
 ) -> Command[Literal["summarize"]]:
-    pass
+    task_id = state["id"]
+    question = state["question"]
+
+    logger.info(f"[{task_id}] Start Network Query: {question}")
+    try:
+        web_search_agent = await get_web_search_agent()
+        web_search_result = await web_search_agent.ainvoke({"messages": state["question"]}, config=config)[
+            'structured_response']
+
+    except Exception as e:
+        logger.error(f"[{task_id}] Network Query Error: {e}", exc_info=True)
+        return create_result_command(state, f"搜索执行出错: {str(e)}", status="failed")
+
+    return create_result_command(state, web_search_result.response, status="completed")
 
 
 async def customer_query(
@@ -165,8 +180,8 @@ async def customer_query(
 async def summarize(
         state: OverallState, *, config: RunnableConfig
 ) -> Command[Literal["__end__"]]:
-    results = state.get("results", [])
-    context = "\n".join([f"- {r["tool"]}: {r["answer"]}" for r in results])
+    results: List[TaskResult] = state.get("results", [])
+    context = "\n".join([f"- {r['tool']}: {r['answer']}" for r in results])
     if context:
         summarize_chain = get_summarize_chain()
         summary = await summarize_chain.ainvoke(

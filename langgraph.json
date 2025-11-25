@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "agent": "test/studio_test.py:agent"
+    "agent": "test/text2cypher_node_test/test_graph.py:agent"
   },
   "env": ".env"
 }

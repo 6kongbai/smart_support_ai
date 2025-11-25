@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,8 +13,13 @@ class Property(BaseModel):
     )
     property_key: str = Field(description="The key of the property being filtered.")
 
-    property_value: Union[int, float, bool, str, None] = Field(
-        description="The literal value found in the query."
+    # 新增：捕获操作符
+    operator: Literal["=", "<>", ">", "<", ">=", "<=", "CONTAINS", "STARTS WITH", "ENDS WITH", "IN"] = Field(
+        description="The comparison operator used in the Cypher statement (e.g., =, >, CONTAINS, IN)."
+    )
+
+    property_value: Union[int, float, bool, str, List[Union[str, int, float]], None] = Field(
+        description="The literal value found in the query. For 'IN' operator, this should be a list."
     )
 
 

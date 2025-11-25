@@ -9,51 +9,40 @@ LOG_DIR = PROJECT_ROOT / "logs"
 
 def path_patcher(record):
     """
-    Loguru 的补丁函数。
-    它会在每次日志记录之前运行，用于计算相对路径并注入到 extra 字典中。
+    Loguru patcher：注入 rel_path，并保证 thread_id 有默认值，避免 format KeyError。
     """
     try:
         file_path = Path(record["file"].path)
-        # 计算相对于 PROJECT_ROOT 的路径
         rel_path = file_path.relative_to(PROJECT_ROOT)
         record["extra"]["rel_path"] = str(rel_path)
     except ValueError:
-        # 如果文件不在 PROJECT_ROOT 下，回退到仅显示文件名
         record["extra"]["rel_path"] = record["file"].name
+
+    record["extra"].setdefault("thread_id", "-")
 
 
 def _setup_logging():
-    """
-    配置日志的内部函数。
-    私有函数（下划线开头），不需要外部调用。
-    """
-    # 1. 创建日志目录
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    # 2. 清除旧配置（防止重复添加 sink）
     logger.remove()
-
-    # 3. 应用 patcher
-    # 注意：configure 只需要调用一次
     logger.configure(patcher=path_patcher)
 
-    # 定义统一的格式字符串
+    # ✅ 只额外打印 thread_id
     log_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
         "<level>{level: <8}</level> | "
+        "<magenta>{extra[thread_id]}</magenta> | "
         "<cyan>{extra[rel_path]}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
         "<level>{message}</level>"
     )
 
-    # 4. 添加控制台输出
     logger.add(
         sys.stdout,
         format=log_format,
         level="DEBUG",
         enqueue=True,
+        catch=True,
     )
 
-    # 5. 添加常规文件输出
     logger.add(
         LOG_DIR / "app.log",
         rotation="500 MB",
@@ -63,9 +52,9 @@ def _setup_logging():
         format=log_format,
         encoding="utf-8",
         enqueue=True,
+        catch=True,
     )
 
-    # 6. 添加错误日志输出
     logger.add(
         LOG_DIR / "error.log",
         rotation="100 MB",
@@ -75,9 +64,8 @@ def _setup_logging():
         format=log_format,
         encoding="utf-8",
         enqueue=True,
+        catch=True,
     )
 
 
 _setup_logging()
-
-__all__ = ["logger"]

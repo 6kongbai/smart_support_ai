@@ -1,6 +1,8 @@
-from typing import List, Dict, NamedTuple, Literal, Any, Annotated
+from typing import List, Dict, NamedTuple
 
-from pydantic import BaseModel, Field
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+from app.core.loader import load_yaml_config
 
 
 # 1. 定义模版结构元数据
@@ -367,3 +369,17 @@ RETURN p.ProductName, p.UnitPrice, p.UnitsInStock
         required_params=[]
     ),
 }
+
+TEMPLATE_DESC = "\n".join(
+    [f"- {k}: {v.description}"
+     for k, v in CYPHER_TEMPLATES.items()]
+)
+
+TEMPLATE_DESC_PARAM = "\n".join(
+    [f"- {k}: {v.description} (必填参数: {v.required_params})"
+     for k, v in CYPHER_TEMPLATES.items()]
+)
+
+mcp_client = MultiServerMCPClient(
+    load_yaml_config().get("MCP")
+)

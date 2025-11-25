@@ -7,20 +7,20 @@ DEFAULTS:
 
 PROVIDERS:
   DASHSCOPE:
-    BASE_URL: $DASHSCOPE_BASE_URL
-    API_KEY: $DASHSCOPE_API_KEY
+    BASE_URL: ${DASHSCOPE_BASE_URL}
+    API_KEY: ${DASHSCOPE_API_KEY}
 
   OPENAI:
-    BASE_URL: $OPENAI_BASE_URL
-    API_KEY: $OPENAI_API_KEY
+    BASE_URL: ${OPENAI_BASE_URL}
+    API_KEY: ${OPENAI_API_KEY}
 
   DEEPSEEK:
-    BASE_URL: $DEEPSEEK_BASE_URL
-    API_KEY: $DEEPSEEK_API_KEY
+    BASE_URL: ${DEEPSEEK_BASE_URL}
+    API_KEY: ${DEEPSEEK_API_KEY}
 
   GEMINI:
-    BASE_URL: $GEMINI_BASE_URL
-    API_KEY: $GEMINI_API_KEY
+    BASE_URL: ${GEMINI_BASE_URL}
+    API_KEY: ${GEMINI_API_KEY}
 
 
 MODELS:
@@ -50,10 +50,10 @@ MODELS:
     temperature: 0
 
   function-calling:
-      TYPE: "chat"
-      PROVIDER: OPENAI
-      MODEL_NAME: "gpt-5.1"
-      temperature: 0.1
+    TYPE: "chat"
+    PROVIDER: OPENAI
+    MODEL_NAME: "gpt-5.1"
+    temperature: 0.1
 
   # --- Embedding ---
   text-embedding-v4:
@@ -68,4 +68,15 @@ NEO4J:
   DATABASE: neo4j
 
 MILVUS:
-  URI: http://112.124.68.11:19530
+  URI: http://106.55.135.2:19530
+  TOKEN: root:108775622q
+
+
+MCP:
+  web-search:
+    transport: sse
+    url: https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/sse
+    headers:
+      Authorization: Bearer ${DASHSCOPE_API_KEY}
+
+

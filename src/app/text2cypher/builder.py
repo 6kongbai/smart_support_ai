@@ -16,7 +16,6 @@ def _build_base_graph():
         input_schema=InputState,
         output_schema=OutputState
     )
-    builder.set_entry_point('generation_cypher')
 
     builder.add_node("generation_cypher", generation_cypher)
     builder.add_node("validate_cypher", validate_cypher)
@@ -24,17 +23,18 @@ def _build_base_graph():
     builder.add_node('validate_cypher_with_schema', validate_cypher_with_schema)
     builder.add_node('correction_cypher', correction_cypher)
 
+    builder.set_entry_point('generation_cypher')
     builder.set_finish_point('correction_cypher')
     return builder
 
 
-def build_text2pycher_agent():
+def build_text2cypher_agent():
     """Build and return the agent workflow graph without memory."""
     # build state graph
     builder = _build_base_graph()
-    return builder.compile()
+    return builder.compile(name="Text2CypherSubGraph")
 
 
 if __name__ == '__main__':
-    graph = build_text2pycher_agent()
+    graph = build_text2cypher_agent()
     print(graph.get_graph().draw_mermaid())

@@ -1,14 +1,15 @@
+import asyncio
 import re
-from functools import cache
-from typing import Any
+from typing import Any, Optional
 
 from langchain_neo4j import Neo4jGraph
 from langchain_neo4j.chains.graph_qa.cypher_utils import Schema, CypherQueryCorrector
+from loguru import logger
 
-from app.db.neo4j.client import get_neo4j_graph
+from app.db.neo4j.client import neo4j_conf
 
 # 匹配目标：移除 Schema 字符串中自动生成的、无关的 'CypherQuery' 节点定义
-CYPHER_QUERY_NODE_PATTERN = re.compile(
+_CYPHER_QUERY_NODE_PATTERN = re.compile(
     r"^(- \*\*CypherQuery\*\*[\s\S]+?)(^Relationship properties|- \*)",
     re.MULTILINE
 )
@@ -20,51 +21,81 @@ def _clean_schema_string(schema_str: str) -> str:
     1. 移除无关的 CypherQuery 节点。
     2. 替换花括号以防止 LangChain Prompt 注入冲突。
     """
-    # 移除干扰节点
-    if "CypherQuery" in schema_str:
-        schema_str = CYPHER_QUERY_NODE_PATTERN.sub(r"\2", schema_str)
+    if not schema_str:
+        return ""
 
-    # 替换花括号：Neo4j schema 包含 {prop: type}，但这会与 PromptTemplate 的 {variable} 冲突
-    # 将 { } 替换为 [ ] 是业界通用的做法
+    if "CypherQuery" in schema_str:
+        schema_str = _CYPHER_QUERY_NODE_PATTERN.sub(r"\2", schema_str)
+
+    # Neo4j schema 属性是 {prop: type}，与 PromptTemplate 的 {variable} 冲突
     return schema_str.replace("{", "[").replace("}", "]")
 
 
-@cache
+def _load_schema_sync() -> tuple[Optional[str], Optional[dict[str, Any]]]:
+    """
+    同步从 Neo4j 加载 schema，并返回（文本schema, 结构化schema）。
+    出错时返回 (None, None)。
+    """
+    graph = Neo4jGraph(
+        url=neo4j_conf["URI"],
+        username=neo4j_conf["USERNAME"],
+        password=neo4j_conf["PASSWORD"],
+        database=neo4j_conf["DATABASE"]
+    )
+
+    schema_text = _clean_schema_string(graph.schema)
+    structured = graph.structured_schema
+
+    logger.info("Neo4j schema loaded successfully")
+    return schema_text, structured
+
+
+_GRAPH_SCHEMA: Optional[str] = None
+_STRUCTURED_SCHEMA: Optional[dict[str, Any]] = None
+
+
+def _loaded() -> None:
+    """
+    确保 schema 已加载到内存（线程安全 lazy-init）。
+    若加载失败则抛 RuntimeError。
+    """
+
+    global _GRAPH_SCHEMA, _STRUCTURED_SCHEMA
+
+    schema_text, structured = _load_schema_sync()
+    if schema_text is None or structured is None:
+        raise RuntimeError("Failed to load Neo4j schema. Please check your Neo4j connection configuration.")
+
+    _GRAPH_SCHEMA = schema_text
+    _STRUCTURED_SCHEMA = structured
+
+
+_loaded()
+
+
 def get_graph_schema() -> str:
     """
-    获取并缓存格式化后的文本 Schema。
-    用于注入到 Prompt Template 中。
+    获取 Neo4j 图数据库的 schema 文本。
     """
-    try:
-        graph: Neo4jGraph = get_neo4j_graph()
-        # 注意：graph.schema 是一个属性，获取它可能会触发一次对 Neo4j 的查询（取决于 LangChain 版本）
-        raw_schema = graph.schema
-        return _clean_schema_string(raw_schema)
-    except Exception as e:
-        # 在这里可以添加日志 logging.error(f"获取 Schema 失败: {e}")
-        raise e
+    return _GRAPH_SCHEMA
 
 
-@cache
 def get_structured_schema() -> dict[str, Any]:
     """
-    获取并缓存结构化的 Schema 列表。
-    仅用于 CypherQueryCorrector，不直接用于 Prompt。
+    获取 Neo4j 图数据库的结构化 schema。
     """
-    graph = get_neo4j_graph()
-    return graph.structured_schema
+    return _STRUCTURED_SCHEMA
 
 
-@cache
 def get_corrector() -> CypherQueryCorrector:
     """
-    获取全局单例的 CypherQueryCorrector。
-    初始化 Corrector 开销较大，必须缓存。
+    获取 Cypher 查询校正器。
     """
-
     structured_schema = get_structured_schema()
-    schemas = [
-        Schema(el["start"], el["type"], el["end"])
-        for el in structured_schema.get("relationships", [])
-    ]
+
+    relationships = structured_schema.get("relationships") or []
+    if not relationships:
+        logger.warning("No relationships found in structured schema")
+
+    schemas = [Schema(r["start"], r["type"], r["end"]) for r in relationships]
     return CypherQueryCorrector(schemas)

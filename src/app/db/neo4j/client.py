@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from typing import Callable, Generator, AsyncGenerator
 
-from langchain_neo4j import Neo4jGraph
 from neo4j import GraphDatabase, Session, AsyncGraphDatabase, AsyncSession
 
 from app.core.loader import load_yaml_config
@@ -24,16 +23,6 @@ async_driver = AsyncGraphDatabase.driver(
     max_connection_pool_size=50,
     connection_acquisition_timeout=30,
 )
-
-
-def get_neo4j_graph() -> Neo4jGraph:
-    return Neo4jGraph(
-        url=neo4j_conf["URI"],
-        username=neo4j_conf["USERNAME"],
-        password=neo4j_conf["PASSWORD"],
-        database=neo4j_conf["DATABASE"]
-    )
-
 
 def _get_session() -> Session:
     """统一管理 session 创建，方便后续扩展."""

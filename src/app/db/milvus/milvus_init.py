@@ -1,7 +1,6 @@
 from langchain_core.documents import Document
 
 from app.db.milvus.client import get_milvus
-from app.db.milvus.utils import remove_milvus_collection
 
 all_examples = {
     "产品查询": [
@@ -213,7 +212,3 @@ def init_milvus():
         # add_documents 会自动调用 embedding_function 计算向量并存入 Milvus
         vector_store.add_documents(documents)
         print(f"成功插入 {len(documents)} 条示例。")
-
-
-def clear_milvus():
-    remove_milvus_collection("cypher")

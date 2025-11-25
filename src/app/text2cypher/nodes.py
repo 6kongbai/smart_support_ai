@@ -17,10 +17,12 @@ from app.text2cypher.utils import get_cypher_generation_chain, WRITE_CLAUSES_REG
 async def generation_cypher(
         state: InputState, config: RunnableConfig
 ) -> Command[Literal["validate_cypher"]]:
-    cypher_generation_chain = get_cypher_generation_chain()
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
 
+    cypher_generation_chain = get_cypher_generation_chain()
     cypher = await cypher_generation_chain.ainvoke(state["question"], config=config)
-    logger.info(f"生成的Cypher查询语句为: {cypher}")
+    log.info(f"生成的Cypher查询语句为: {cypher}")
 
     return Command(
         goto="validate_cypher",
@@ -35,32 +37,47 @@ async def validate_cypher(
 ) -> Command[Literal["validate_cypher_with_llm", "validate_cypher_with_schema", "correction_cypher"]]:
     original_cypher = state["cypher"]
     errors = list()
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
+    log.info(">> validate_cypher start")
 
     # --- Step 1: 自动修正 (Auto-Correction) ---
+    log.debug("Step1 Auto-Correction start.")
+
     corrector = get_corrector()
     cypher = corrector(original_cypher)
     if cypher != original_cypher:
-        logger.warning(f"Cypher Auto-Corrected: {original_cypher} -> {cypher}")
+        log.warning("Cypher Auto-Corrected: before={} -> after={}", original_cypher, cypher)
+    else:
+        log.info("Cypher Auto-Correction not needed.")
+
+    log.debug("Step1 Auto-Correction done.")
 
     # --- Step 2: 安全检查 (Security Check) ---
+    log.debug("Step2 Security Check start.")
     if match := WRITE_CLAUSES_REGEX.search(cypher):
         msg = f"Security Alert: Cypher contains restricted write clause '{match.group(1).upper()}'"
         errors.append(msg)
-        logger.error(msg)
-
+        log.error(msg)
+    else:
+        log.info("Cypher not contains restricted write clause")
+    log.debug("Step2 Security Check done.")
     # --- Step 3: 语法检查 (Syntax Check via EXPLAIN) ---
+    log.debug("Step3 Syntax Check start (EXPLAIN).")
     try:
         async with get_async_session() as session:
             result = await session.run(f"EXPLAIN {cypher}")
             await result.consume()
-
+        log.info("Cypher 语法检查通过")
     except (CypherSyntaxError, ClientError) as e:
         errors.append(f"Syntax Error: {e.message}")
-        logger.error(errors[-1])
+        log.error(errors[-1])
     except Exception as e:
         errors.append(f"Execution Error: {str(e)}")
-        logger.error(errors[-1])
+        log.error(errors[-1])
 
+    log.debug("Step3 Syntax Check done.")
     if errors:
         return Command(
             goto="correction_cypher",
@@ -74,6 +91,7 @@ async def validate_cypher(
     # --- Step 4: 路由决策 (Routing) ---
     # 如果没有语法错误，进入 Schema/语义 验证阶段
     target_node = "validate_cypher_with_llm" if state.get("llm_validation", False) else "validate_cypher_with_schema"
+    log.info("validate_cypher success. route_to={}", target_node)
     return Command(
         goto=target_node,
         update={
@@ -85,6 +103,11 @@ async def validate_cypher(
 async def validate_cypher_with_llm(
         state: OverallState, config: RunnableConfig
 ) -> Command[Literal["__end__", "correction_cypher"]]:
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
+    log.info(">> validate_cypher_with_llm start")
+
     errors: List[str] = []
     mapping_errors: List[str] = []
 
@@ -98,7 +121,7 @@ async def validate_cypher_with_llm(
     )
     if llm_output.errors:
         errors.extend(llm_output.errors)
-        logger.error(f"LLM Validation Errors: {llm_output.errors}")
+        log.error(f"LLM Validation Errors: {llm_output.errors}")
 
     target_filters = [
         f for f in llm_output.filters
@@ -116,7 +139,7 @@ async def validate_cypher_with_llm(
                     errors.append(f"DB Async Check Error: {str(res)}")
 
     if mapping_errors:  # 场景 A: 数据映射错误 (Mapping Errors)，用户的意图是：如果查不到值，就结束并告诉用户。
-        logger.error(f"数据映射错误: {mapping_errors}")
+        log.error(f"数据映射错误: {mapping_errors}")
         final_errors = errors + mapping_errors
         return Command(
             goto="__end__",
@@ -127,7 +150,7 @@ async def validate_cypher_with_llm(
         )
 
     elif errors:  # 场景 B: 语法/Schema 错误 (Syntax Errors)
-        logger.error(f"语法/Schema 错误: {errors}")
+        log.error(f"语法/Schema 错误: {errors}")
         return Command(
             goto="correction_cypher",
             update={
@@ -137,7 +160,7 @@ async def validate_cypher_with_llm(
         )
 
     else:  # 场景 C: 无错误 (Success)
-        logger.info("无错误")
+        log.info("大模型检查无误")
         return Command(
             goto="__end__",  # 应该跳转到执行 Cypher 的节点，或者结束
             update={
@@ -165,6 +188,11 @@ async def validate_cypher_with_schema(
 async def correction_cypher(
         state: OverallState, config: RunnableConfig
 ) -> Command[Literal["__end__"]]:
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
+    log.info(">> correction_cypher start")
+
     correct_cypher_chain = get_correct_cypher_chain()
     corrected_cypher = await correct_cypher_chain.ainvoke(
         {
@@ -175,7 +203,7 @@ async def correction_cypher(
         , config=config
     )
 
-    logger.info(f"修复后的 Cypher: {corrected_cypher}")
+    log.info(f"修复后的 Cypher: {corrected_cypher}")
 
     return Command(
         goto="__end__",

@@ -3,9 +3,10 @@
 
 import os
 from datetime import datetime
-from typing import List, Any, Mapping
+from pathlib import Path
+from typing import List, Any, Mapping, Dict
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader, select_autoescape, Template
 from langchain_core.messages import BaseMessage, SystemMessage
 
 from app.core.logger import logger
@@ -17,20 +18,26 @@ _env = Environment(
     loader=FileSystemLoader(current_dir),
     autoescape=select_autoescape(['html', 'xml', 'md'])
 )
+_template_cache: Dict[str, Template] = {}
 
-def get_prompt_template(
-        prompt_name: str,
-        **kwargs
-) -> str:
+
+def preload_templates():
+    base = Path(current_dir)
+
+    for p in base.rglob("*.md"):
+        rel_key = p.relative_to(base).with_suffix("").as_posix()
+        _template_cache[rel_key] = _env.get_template(p.relative_to(base).as_posix())
+
+    return _template_cache
+
+preload_templates()
+
+def get_prompt_template(prompt_name: str, **kwargs) -> str:
     try:
-        # 加载模版
-        template = _env.get_template(f"{prompt_name}.md")
-        # 渲染文本
-        return template.render(**kwargs)
-
-    except Exception as e:
-        logger.error(f"Error getting template '{prompt_name}': {e}")
-        raise ValueError(f"Error getting template '{prompt_name}': {e}")
+        tmpl = _template_cache[prompt_name]
+        return tmpl.render(**kwargs)
+    except KeyError as e:
+        raise ValueError(f"Template not preloaded: {prompt_name}") from e
 
 
 def apply_prompt_template(
@@ -70,3 +77,7 @@ def apply_prompt_template(
     except Exception as e:
         logger.error(f"Error applying template '{prompt_name}': {e}")
         raise ValueError(f"Error applying template '{prompt_name}': {e}")
+
+
+if __name__ == '__main__':
+    print(preload_templates())

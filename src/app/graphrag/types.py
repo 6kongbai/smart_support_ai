@@ -1,4 +1,4 @@
-from typing import List, TypedDict, Literal, Dict, Any, Union
+from typing import List, TypedDict, Literal, Dict, Any, Union, Optional, Annotated
 
 from pydantic import BaseModel, Field
 
@@ -62,3 +62,41 @@ class PlannerOutput(BaseModel):
         ...,
         description="分解并路由后的任务列表。"
     )
+
+
+class WebSearchInput(BaseModel):
+    search_query: str = Field(
+        ...,
+        description="需要进行搜索的内容, 建议搜索 query 不超过 70 个字符"
+    )
+    count: Optional[int] = Field(
+        10,
+        ge=1,
+        le=50,
+        description="返回结果的条数，可填范围：1-50，默认为10。"
+    )
+    search_domain_filter: Optional[str] = Field(
+        None,
+        description="用于限定搜索结果的范围，仅返回指定白名单域名的内容，如: www.example.com。"
+    )
+    search_recency_filter: Optional[Literal[
+        "oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"
+    ]] = Field(
+        "noLimit",
+        description=(
+            "搜索指定时间范围内的网页。默认为 noLimit "
+            "可填值：oneDay/oneWeek/oneMonth/oneYear/noLimit"
+        )
+    )
+    content_size: Optional[Literal["medium", "high"]] = Field(
+        "medium",
+        description=(
+            "控制网页摘要的字数；默认 medium（400-600字）"
+            "high（约2500字，成本更高）"
+        )
+    )
+
+
+class ResponseFormat(BaseModel):
+    """Response schema for the agent."""
+    response: Annotated[str, Field(description="联网查询的结果的总结")]

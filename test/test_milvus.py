@@ -1,20 +1,11 @@
 from langchain_core.example_selectors import MaxMarginalRelevanceExampleSelector
 
-from app.db.milvus.client import client, get_milvus
-from app.db.milvus.milvus_init import init_milvus, clear_milvus
+from app.db.milvus.client import get_milvus
+from app.db.milvus.milvus_init import init_milvus
 
 
 def test_milvus_init():
     init_milvus()
-
-
-def test_clear_milvus():
-    clear_milvus()
-
-
-def test_milvus_search():
-    print(client.list_collections())
-    print(client.has_collection("cypher"))
 
 
 def test_retriever():
