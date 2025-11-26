@@ -1,7 +1,7 @@
-import pytest
+import uuid
 
 from app.graph.nodes import analyze_and_route_query, respond_to_general_query, get_additional_info
-from app.graph.state import OverallStates, InputState
+from app.graph.state import InputState
 
 
 async def test_analyze_and_route_query_simple():
@@ -24,6 +24,6 @@ async def test_get_additional_info():
     fake_state = InputState(
         messages=[{"role": "user", "content": "你好"}],
     )
-    fake_config = {}
+    fake_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     state = await get_additional_info(fake_state, config=fake_config)
     print(state)

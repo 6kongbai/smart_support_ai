@@ -1,16 +1,14 @@
-from typing import NotRequired, Literal, Annotated
+from typing import Literal, Annotated
 
-from langgraph.channels import EphemeralValue
-from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
 
 
 class GradeHallucinations(BaseModel):
     """Binary score for hallucination present in generation answer."""
-    binary_score: str = Field(
-        default="0",
-        description="Answer is grounded in the facts, '1' or '0'"
+    binary_score: Literal["yes", "no"] = Field(
+        description="Answer is grounded in the facts, 'yes' or 'no'"
     )
+
 
 class GuardrailsOutput(BaseModel):
     """
@@ -38,4 +36,3 @@ class Router(BaseModel):
     confidence: Annotated[int, Field(
         description="对该分类判断的置信度评分，范围 1 到 5（5表示非常确定，1表示完全不确定）。"
     )]
-

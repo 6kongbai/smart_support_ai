@@ -1,20 +1,23 @@
-from typing import NotRequired, Annotated
+from typing import NotRequired, Annotated, TypedDict, List
 
+from langchain_core.messages import AnyMessage
 from langgraph.channels import EphemeralValue
-from langgraph.graph import MessagesState
+from langgraph.graph import add_messages
 
 from app.graph.types import GradeHallucinations, JumpTo
 
 
-class InputState(MessagesState):
-    pass
+class InputState(TypedDict):
+    messages: Annotated[List[AnyMessage], add_messages]
 
 
-class OutputState(MessagesState):
-    answer: str
+class OutputState(TypedDict):
+    messages: Annotated[List[AnyMessage], add_messages]
 
 
-class OverallStates(InputState, OutputState):
-    jump_to: NotRequired[Annotated[JumpTo | None, EphemeralValue]]
+class OverallState(TypedDict):
+    next: NotRequired[Annotated[JumpTo, EphemeralValue]]
     hallucination: NotRequired[Annotated[GradeHallucinations, EphemeralValue]]
     reasoning: NotRequired[Annotated[str | None, EphemeralValue]]
+    messages: Annotated[List[AnyMessage], add_messages]
+    documents: NotRequired[Annotated[str, EphemeralValue]]

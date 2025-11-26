@@ -1,6 +1,6 @@
 import asyncio
 from functools import cache
-from typing import Literal
+from typing import Literal, Optional
 
 from langchain.agents import create_agent
 from langchain_core.output_parsers import StrOutputParser
@@ -40,7 +40,7 @@ def get_text2cypher_agent():
     return build_text2cypher_agent()
 
 
-_web_search_agent: CompiledStateGraph = None
+_web_search_agent: Optional[CompiledStateGraph] = None
 _web_search_agent_lock = asyncio.Lock()
 
 

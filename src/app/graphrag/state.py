@@ -18,12 +18,13 @@ class OverallState(TypedDict):
     results: Annotated[List[TaskResult], operator.add]
     tasks: List[Task]
     summary: str
-    answer: str
+    context: str
 
 
 class OutputState(TypedDict):
     """The final output for multi-agent workflows."""
-    answer: str
+    summary: str
+    context: str
 
 
 class TaskState(TypedDict):

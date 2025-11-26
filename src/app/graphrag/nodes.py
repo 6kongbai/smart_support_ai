@@ -21,6 +21,9 @@ async def planner(
     Break user query into chunks, if appropriate.
     """
 
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
     planner_chain = get_planner_chain()
     planner_output = cast(
         PlannerOutput, await planner_chain.ainvoke(
@@ -29,8 +32,8 @@ async def planner(
         )
     )
 
-    logger.info(f"Planner Reasoning: {planner_output.reasoning}")
-    logger.info(f"Total Sub Tasks: {len(planner_output.tasks)}")
+    log.info(f"Planner Reasoning: {planner_output.reasoning}")
+    log.info(f"Total Sub Tasks: {len(planner_output.tasks)}")
 
     return {"tasks": planner_output.tasks}
 
@@ -38,6 +41,9 @@ async def planner(
 async def text2cypher_query(
         state: TaskState, *, config: RunnableConfig
 ) -> Command[Literal["summarize"]]:
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
     # Step 1. 生成 Cypher 语句
     try:
         generate_cypher_agent = get_text2cypher_agent()
@@ -54,10 +60,10 @@ async def text2cypher_query(
             return create_result_command(state, "根据现有知识库无法查到相关数据", status="failed")
 
         cypher_query_str = response["cypher"]
-        logger.info(f"生成的 Cypher: {cypher_query_str}")
+        log.info(f"生成的 Cypher: {cypher_query_str}")
 
     except Exception as e:
-        logger.exception(f"Cypher 生成阶段出错: {e}")
+        log.exception(f"Cypher 生成阶段出错: {e}")
         return create_result_command(state, f"生成语句时发生系统错误: {str(e)}", status="failed")
 
     # Step 2. 运行 Cypher 并转存为 String
@@ -77,17 +83,20 @@ async def text2cypher_query(
             return create_result_command(state, answer_content, status="completed")
 
     except Exception as e:
-        logger.exception(f"数据库执行出错: {e}")
+        log.exception(f"数据库执行出错: {e}")
         return create_result_command(state, f"数据库查询执行出错: {str(e)}", status="failed")
 
 
 async def predefined_cypher_query(
         state: TaskState, *, config: RunnableConfig
 ) -> Command[Literal["summarize"]]:
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
     task_id = state["id"]
     question = state["question"]
 
-    logger.info(f"[{task_id}] Start Predefined Query: {question}")
+    log.info(f"[{task_id}] Start Predefined Query: {question}")
 
     try:
         chain = get_predefined_cypher_chain()
@@ -121,11 +130,11 @@ async def predefined_cypher_query(
                 "请检查用户问题中是否提供了相应实体。"
             )
 
-        logger.info(f"[{task_id}] Selected Template: {decision.template_id} | Params: {parameters}")
+        log.info(f"[{task_id}] Selected Template: {decision.template_id} | Params: {parameters}")
 
         # --- Step 3: 执行数据库查询 ---
         executed_cypher = template_obj.cypher
-        logger.info(f"[{task_id}] Executing Cypher: {executed_cypher} with {parameters}")
+        log.info(f"[{task_id}] Executing Cypher: {executed_cypher} with {parameters}")
         async with get_async_session() as session:
             # 使用提取的参数运行查询
             result_cursor = await session.run(executed_cypher, parameters)
@@ -138,12 +147,12 @@ async def predefined_cypher_query(
 
     except ValueError as ve:
         error_msg = f"校验失败: {str(ve)}"
-        logger.warning(f"[{task_id}] Validation Warning: {error_msg}")
+        log.warning(f"[{task_id}] Validation Warning: {error_msg}")
         return create_result_command(state, error_msg, status="failed")
 
     except Exception as e:
         error_msg = f"数据库/异步执行失败: {type(e).__name__} - {str(e)}"
-        logger.error(f"[{task_id}] Execution Error: {error_msg}")
+        log.error(f"[{task_id}] Execution Error: {error_msg}")
         return create_result_command(state, error_msg, status="failed")
 
     # --- Step 4: 返回成功结果 ---
@@ -153,17 +162,20 @@ async def predefined_cypher_query(
 async def network_query(
         state: TaskState, *, config: RunnableConfig
 ) -> Command[Literal["summarize"]]:
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
+
     task_id = state["id"]
     question = state["question"]
 
-    logger.info(f"[{task_id}] Start Network Query: {question}")
+    log.info(f"[{task_id}] Start Network Query: {question}")
     try:
         web_search_agent = await get_web_search_agent()
-        web_search_result = await web_search_agent.ainvoke({"messages": state["question"]}, config=config)[
-            'structured_response']
+        result = await web_search_agent.ainvoke({"messages": state["question"]}, config=config)
+        web_search_result = result['structured_response']
 
     except Exception as e:
-        logger.error(f"[{task_id}] Network Query Error: {e}", exc_info=True)
+        log.error(f"[{task_id}] Network Query Error: {e}", exc_info=True)
         return create_result_command(state, f"搜索执行出错: {str(e)}", status="failed")
 
     return create_result_command(state, web_search_result.response, status="completed")
@@ -190,8 +202,11 @@ async def summarize(
             config=config
         )
     else:
-        summary = ""
+        summary = "所有的查询无返回"
     return Command(
         goto="__end__",
-        update={"summary": summary}
+        update={
+            "summary": summary,
+            "context": context,
+        }
     )

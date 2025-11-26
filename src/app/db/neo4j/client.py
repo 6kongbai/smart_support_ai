@@ -1,3 +1,4 @@
+import atexit
 from contextlib import asynccontextmanager, contextmanager
 from functools import wraps
 from typing import Callable, Generator, AsyncGenerator
@@ -23,6 +24,9 @@ async_driver = AsyncGraphDatabase.driver(
     max_connection_pool_size=50,
     connection_acquisition_timeout=30,
 )
+
+atexit.register(driver.close)
+
 
 def _get_session() -> Session:
     """统一管理 session 创建，方便后续扩展."""
