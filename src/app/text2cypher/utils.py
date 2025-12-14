@@ -5,9 +5,8 @@ from typing import List, Iterator, Optional, Dict, Literal
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
-from langchain_core.vectorstores import VectorStoreRetriever
 
-from app.db.milvus.client import get_milvus, retriever
+from app.db.milvus.client import get_milvus
 from app.db.neo4j.client import get_async_session
 from app.db.neo4j.utils import get_graph_schema, get_structured_schema
 from app.llms.llm import get_router_model
@@ -58,12 +57,11 @@ async def check_value_exists_async(filter_item: Property) -> Optional[str]:
     仅当操作符为 '=' 时，使用原生 AsyncSession 检查属性值是否存在。
     其他的操作符（IN, CONTAINS, >, < 等）一律跳过校验，避免误报。
     """
-
-    if filter_item.operator != "=":
-        return None
-
     expected_type = get_schema_type(filter_item.node_label, filter_item.property_key)
     final_value = filter_item.property_value
+
+    if filter_item.operator != "=" or expected_type != "STRING":
+        return None
 
     # --- 类型对齐逻辑 (仅处理单值) ---
     if expected_type == "INTEGER" and isinstance(final_value, str):
@@ -103,6 +101,7 @@ def get_cypher_generation_chain():
     text2cypher_prompt = create_text2cypher_generation_prompt_template().partial(
         schema=get_graph_schema()
     )
+    retriever = get_milvus().as_retriever(search_type="mmr")
 
     context_prep_chain = {
         "examples": retriever | RunnableLambda(format_cypher),

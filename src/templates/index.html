@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph Neural Interface</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            black: '#0a0a0f',
+                            dark: '#13131f',
+                            panel: '#1c1c2e',
+                            primary: '#6366f1', // Indigo
+                            accent: '#06b6d4',  // Cyan
+                            glow: 'rgba(99, 102, 241, 0.5)'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['"JetBrains Mono"', '"Fira Code"', 'Consolas', 'monospace'],
+                        sans: ['"Inter"', 'system-ui', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'scanline': 'scanline 8s linear infinite',
+                    },
+                    keyframes: {
+                        'pulse-glow': {
+                            '0%, 100%': { boxShadow: '0 0 10px rgba(6, 182, 212, 0.2)' },
+                            '50%': { boxShadow: '0 0 20px rgba(6, 182, 212, 0.6)' },
+                        },
+                        'scanline': {
+                            '0%': { transform: 'translateY(-100%)' },
+                            '100%': { transform: 'translateY(100%)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Marked.js & Highlight.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #050508;
+            background-image:
+                radial-gradient(circle at 50% 0%, #1e1e3f 0%, transparent 50%),
+                radial-gradient(circle at 0% 100%, #1e1e3f 0%, transparent 30%);
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #33334d;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4f4f7a;
+        }
+
+        /* Markdown 样式覆盖 */
+        .prose {
+            color: #d1d5db;
+            max-width: none;
+        }
+        .prose p {
+            margin-bottom: 0.8em;
+            line-height: 1.6;
+        }
+        .prose strong {
+            color: #fff;
+            font-weight: 600;
+        }
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5em;
+            margin-bottom: 0.8em;
+        }
+        .prose ol {
+            list-style-type: decimal;
+            padding-left: 1.5em;
+            margin-bottom: 0.8em;
+        }
+        .prose code {
+            color: #06b6d4;
+            background-color: rgba(6, 182, 212, 0.1);
+            padding: 0.2em 0.4em;
+            border-radius: 0.3em;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+        .prose pre {
+            background: #0d0d14 !important;
+            border: 1px solid #2d2d3f;
+            border-radius: 0.5rem;
+            margin: 1em 0;
+            padding: 1em;
+            overflow-x: auto;
+        }
+        .prose pre code {
+            color: inherit;
+            background-color: transparent;
+            padding: 0;
+        }
+        .prose blockquote {
+            border-left: 4px solid #6366f1;
+            padding-left: 1em;
+            color: #94a3b8;
+            font-style: italic;
+        }
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+        .prose th, .prose td {
+            border: 1px solid #2d2d3f;
+            padding: 0.5em;
+            text-align: left;
+        }
+        .prose th {
+            background-color: #1c1c2e;
+        }
+
+        /* 打字机光标 */
+        .typing-cursor::after {
+            content: '▋';
+            display: inline-block;
+            animation: blink 1s step-start infinite;
+            color: #06b6d4;
+            margin-left: 2px;
+            vertical-align: baseline;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* 思考过程面板动画 */
+        .thinking-process {
+            transition: all 0.3s ease;
+            border-left: 2px solid #6366f1;
+            background: rgba(99, 102, 241, 0.05);
+        }
+        .thinking-process.collapsed .content {
+            display: none;
+        }
+        .thinking-process .header:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* 玻璃拟态卡片 */
+        .glass-panel {
+            background: rgba(28, 28, 46, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center overflow-hidden selection:bg-cyber-primary selection:text-white">
+
+    <!-- 背景装饰 -->
+    <div class="fixed top-0 left-0 w-full h-full pointer-events-none z-0 overflow-hidden">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyber-primary opacity-[0.05] blur-[100px] rounded-full"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyber-accent opacity-[0.05] blur-[100px] rounded-full"></div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="w-full max-w-5xl h-full flex flex-col relative z-10 md:h-[95vh] md:my-4">
+
+        <!-- 顶部状态栏 -->
+        <header class="glass-panel rounded-t-xl px-6 py-4 flex justify-between items-center border-b border-white/5 mx-2 md:mx-0">
+            <div class="flex items-center gap-4">
+                <div class="relative">
+                    <div class="w-10 h-10 bg-gradient-to-tr from-cyber-primary to-cyber-accent rounded-lg flex items-center justify-center text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+                        <i class="fa-solid fa-microchip text-xl"></i>
+                    </div>
+                    <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-cyber-black animate-pulse"></div>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-wide text-white font-mono">NEURAL_INTERFACE <span class="text-cyber-accent text-xs align-top opacity-70">v2.0</span></h1>
+                    <div class="flex items-center gap-2 text-xs text-gray-400 font-mono">
+                        <span class="text-cyber-accent">●</span> SYSTEM ONLINE
+                        <span class="mx-1">|</span>
+                        <span>ID: <span id="conversation-id-display" class="text-gray-300">WAITING...</span></span>
+                    </div>
+                </div>
+            </div>
+            <button onclick="resetConversation()" class="group relative px-4 py-2 rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30">
+                <span class="text-sm font-medium"><i class="fa-solid fa-rotate-right mr-2 group-hover:rotate-180 transition-transform"></i>RESET</span>
+            </button>
+        </header>
+
+        <!-- 聊天区域 -->
+        <main id="chat-container" class="glass-panel flex-1 overflow-y-auto p-4 md:p-6 space-y-6 scroll-smooth mx-2 md:mx-0 bg-opacity-50">
+            <!-- 欢迎消息 -->
+            <div class="flex gap-4 fade-in">
+                <div class="w-10 h-10 rounded-lg bg-cyber-panel border border-white/10 flex-shrink-0 flex items-center justify-center text-cyber-accent shadow-lg">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="flex flex-col gap-2 max-w-[85%]">
+                    <span class="text-xs text-gray-500 font-mono ml-1">SYSTEM_AI</span>
+                    <div class="bg-cyber-panel/80 p-5 rounded-2xl rounded-tl-none text-gray-200 border border-white/5 shadow-md prose">
+                        <p>系统已就绪。LangGraph 核心已连接。</p>
+                        <p>我可以协助您处理复杂任务，并在处理过程中展示我的思考路径。请下达指令。</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部输入栏 -->
+        <div class="glass-panel rounded-b-xl border-t border-white/5 p-4 mx-2 md:mx-0">
+            <form id="chat-form" class="relative group">
+                <div class="absolute -inset-0.5 bg-gradient-to-r from-cyber-primary to-cyber-accent rounded-xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
+                <div class="relative flex items-end gap-2 bg-cyber-black rounded-xl px-4 py-3 border border-white/10">
+                    <textarea
+                        id="user-input"
+                        rows="1"
+                        class="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 text-gray-200 placeholder-gray-600 py-2 font-sans leading-relaxed"
+                        placeholder="输入指令 / Enter Command..."
+                        required
+                    ></textarea>
+                    <button
+                        type="submit"
+                        id="send-btn"
+                        class="mb-1 p-2 rounded-lg bg-cyber-primary/20 text-cyber-primary hover:bg-cyber-primary hover:text-white transition-all duration-300 border border-cyber-primary/30"
+                    >
+                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                    </button>
+                </div>
+            </form>
+            <div class="text-center mt-3 flex justify-center gap-4 text-[10px] text-gray-600 font-mono uppercase tracking-wider">
+                <span><i class="fa-solid fa-lock mr-1"></i>Encrypted</span>
+                <span><i class="fa-solid fa-bolt mr-1"></i>Low Latency</span>
+                <span><i class="fa-solid fa-code-branch mr-1"></i>LangGraph Powered</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 初始化 Markdown & Highlight ---
+        marked.setOptions({
+            highlight: function(code, lang) {
+                const language = highlight.getLanguage(lang) ? lang : 'plaintext';
+                return highlight.highlight(code, { language }).value;
+            },
+            langPrefix: 'hljs language-'
+        });
+
+        // --- 状态管理 ---
+        const state = {
+            userId: localStorage.getItem('user_id') || Math.floor(Math.random() * 1000000),
+            conversationId: localStorage.getItem('conversation_id') || null,
+            isGenerating: false
+        };
+
+        if (!localStorage.getItem('user_id')) {
+            localStorage.setItem('user_id', state.userId);
+        }
+
+        function updateConversationUI() {
+            const display = document.getElementById('conversation-id-display');
+            if (state.conversationId) {
+                display.textContent = state.conversationId.slice(0, 8).toUpperCase();
+                display.classList.add('text-cyber-accent');
+            } else {
+                display.textContent = 'NEW_SESSION';
+            }
+        }
+        updateConversationUI();
+
+        // --- DOM ---
+        const chatContainer = document.getElementById('chat-container');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        // --- 自动高度 ---
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+        userInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!state.isGenerating && this.value.trim()) chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        // --- 消息处理核心 ---
+
+        // 创建思考过程面板
+        function createThinkingPanel(container) {
+            const panelId = `think-${Date.now()}`;
+            const html = `
+                <div id="${panelId}" class="thinking-process rounded-lg mb-2 text-sm overflow-hidden font-mono text-gray-400 bg-black/20">
+                    <div class="header cursor-pointer p-2 flex items-center gap-2 select-none" onclick="toggleThinking('${panelId}')">
+                        <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200"></i>
+                        <span class="text-cyber-primary"><i class="fa-solid fa-brain mr-1"></i>Thought Process</span>
+                        <span class="loading-dots opacity-50">...</span>
+                    </div>
+                    <div class="content p-3 pt-0 whitespace-pre-wrap border-t border-white/5 text-xs text-gray-500 bg-black/10"></div>
+                </div>
+            `;
+            container.insertAdjacentHTML('afterbegin', html); // 插入到消息气泡的最上方
+            return document.querySelector(`#${panelId} .content`);
+        }
+
+        window.toggleThinking = (id) => {
+            const el = document.getElementById(id);
+            const icon = el.querySelector('.fa-chevron-down');
+            if (el.classList.contains('collapsed')) {
+                el.classList.remove('collapsed');
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                el.classList.add('collapsed');
+                icon.style.transform = 'rotate(-90deg)';
+            }
+        };
+
+        function appendMessage(role, content, isStreaming = false) {
+            const isUser = role === 'user';
+            const msgId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            const html = `
+                <div class="flex gap-4 ${isUser ? 'flex-row-reverse' : ''} animate-fade-in group">
+                    <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center shadow-lg border border-white/10 ${isUser ? 'bg-cyber-dark text-gray-300' : 'bg-cyber-panel text-cyber-accent'}">
+                        <i class="fa-solid ${isUser ? 'fa-user' : 'fa-robot'}"></i>
+                    </div>
+                    <div class="flex flex-col gap-1 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}">
+                        <span class="text-[10px] text-gray-600 font-mono uppercase tracking-wider mx-1">${isUser ? 'USER_CMD' : 'AI_RESPONSE'}</span>
+                        <div id="${msgId}" class="relative p-5 rounded-2xl border border-white/5 shadow-md w-full overflow-hidden ${isUser ? 'bg-cyber-primary/10 text-gray-100 rounded-tr-none border-cyber-primary/20' : 'bg-cyber-panel/80 text-gray-200 rounded-tl-none'}">
+                            <!-- 内容容器 -->
+                            <div class="msg-content prose prose-invert">
+                                ${isUser ? content : (isStreaming ? '<span class="typing-cursor"></span>' : marked.parse(content))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+            return document.getElementById(msgId);
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function resetConversation() {
+            chatContainer.innerHTML = ''; // 清空界面
+            state.conversationId = null;
+            localStorage.removeItem('conversation_id');
+            updateConversationUI();
+            location.reload();
+        }
+
+        // --- 核心提交逻辑 ---
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = userInput.value.trim();
+            if (!query || state.isGenerating) return;
+
+            state.isGenerating = true;
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+            // 1. 显示用户消息
+            appendMessage('user', query.replace(/\n/g, '<br>')); // 简单处理换行
+
+            // 2. 创建 AI 回复容器
+            const aiMsgContainer = appendMessage('ai', '', true);
+            const aiContentArea = aiMsgContainer.querySelector('.msg-content');
+
+            // 3. 思考过程处理器
+            let thinkingPanelContent = null;
+            let fullResponse = "";
+            let currentThinkingText = "";
+
+            try {
+                const formData = new FormData();
+                formData.append('query', query);
+                formData.append('user_id', state.userId);
+                if (state.conversationId) formData.append('conversation_id', state.conversationId);
+
+                const response = await fetch('/api/langgraph/query', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error(`Status Code: ${response.status}`);
+
+                const newConvId = response.headers.get('X-Conversation-ID');
+                if (newConvId && newConvId !== state.conversationId) {
+                    state.conversationId = newConvId;
+                    localStorage.setItem('conversation_id', newConvId);
+                    updateConversationUI();
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.substring(6);
+                                const content = JSON.parse(jsonStr); // 解析后端发来的内容
+
+                                // === 智能处理逻辑 ===
+
+                                // 情况A: 如果是字符串，尝试检查是不是 JSON 格式的思考过程
+                                if (typeof content === 'string') {
+                                    let isThinking = false;
+                                    let thinkingData = null;
+
+                                    // 尝试解析内部 JSON (针对 {"reasoning":...} 这种字符串)
+                                    if (content.trim().startsWith('{')) {
+                                        try {
+                                            const potentialJson = JSON.parse(content);
+                                            // 检查是否包含思考相关的字段
+                                            if (potentialJson.reasoning || potentialJson.decision || potentialJson.next || potentialJson.confidence) {
+                                                isThinking = true;
+                                                thinkingData = potentialJson;
+                                            }
+                                        } catch (e) {
+                                            // 不是合法JSON，当做普通文本处理
+                                        }
+                                    }
+
+                                    if (isThinking && thinkingData) {
+                                        // 动态创建思考面板（如果还没创建）
+                                        if (!thinkingPanelContent) {
+                                            thinkingPanelContent = createThinkingPanel(aiMsgContainer);
+                                        }
+                                        // 格式化显示思考过程
+                                        const thoughtText = `> [${thinkingData.next || 'THINKING'}] ${thinkingData.reasoning || 'Analyzing...'}\n`;
+                                        currentThinkingText += thoughtText;
+                                        thinkingPanelContent.textContent = currentThinkingText;
+                                        // 自动滚动思考区域
+                                        thinkingPanelContent.scrollTop = thinkingPanelContent.scrollHeight;
+                                    } else {
+                                        // 普通对话文本
+                                        fullResponse += content;
+                                        aiContentArea.innerHTML = marked.parse(fullResponse);
+                                        // 重新应用代码高亮
+                                        aiContentArea.querySelectorAll('pre code').forEach((block) => {
+                                            hljs.highlightElement(block);
+                                        });
+                                    }
+                                } else {
+                                    // 情况B: 如果后端直接发的是 JSON 对象（很少见，通常 SSE data 是字符串）
+                                    fullResponse += JSON.stringify(content);
+                                    aiContentArea.innerHTML = marked.parse(fullResponse);
+                                }
+
+                                scrollToBottom();
+                            } catch (e) {
+                                console.warn('Stream parse error:', e);
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                aiContentArea.innerHTML += `<div class="text-red-400 bg-red-900/20 p-3 rounded mt-2 border border-red-500/30 text-xs font-mono"><i class="fa-solid fa-triangle-exclamation mr-2"></i>CONNECTION_LOST: ${error.message}</div>`;
+            } finally {
+                state.isGenerating = false;
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fa-solid fa-paper-plane text-sm"></i>';
+                userInput.focus();
+
+                // 移除打字机光标
+                const cursor = aiContentArea.querySelector('.typing-cursor');
+                if (cursor) cursor.remove();
+
+                // 思考完成后，默认折叠思考面板
+                const thinkPanel = aiMsgContainer.querySelector('.thinking-process');
+                if (thinkPanel) {
+                    thinkPanel.classList.add('collapsed');
+                    const icon = thinkPanel.querySelector('.fa-chevron-down');
+                    if (icon) icon.style.transform = 'rotate(-90deg)';
+                    const dots = thinkPanel.querySelector('.loading-dots');
+                    if (dots) dots.innerHTML = '<i class="fa-solid fa-check text-green-500"></i>';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

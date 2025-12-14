@@ -1,7 +1,7 @@
 from typing import NotRequired, Annotated, TypedDict, List
 
 from langchain_core.messages import AnyMessage
-from langgraph.channels import EphemeralValue
+from langgraph.channels import EphemeralValue, LastValue
 from langgraph.graph import add_messages
 
 from app.graph.types import GradeHallucinations, JumpTo
@@ -21,3 +21,6 @@ class OverallState(TypedDict):
     reasoning: NotRequired[Annotated[str | None, EphemeralValue]]
     messages: Annotated[List[AnyMessage], add_messages]
     documents: NotRequired[Annotated[str, EphemeralValue]]
+    reformulate: Annotated[bool | None, LastValue]
+    original_question: Annotated[str | None, LastValue]
+    question: Annotated[str | None, LastValue]

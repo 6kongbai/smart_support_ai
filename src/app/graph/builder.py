@@ -1,3 +1,4 @@
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph
 
 from app.graph.edges import route_conditional_edge
@@ -38,6 +39,15 @@ def build_agent():
     builder = _build_base_graph()
     return builder.compile()
 
+def build_graph_with_memory():
+    """Build and return the agent workflow graph with memory."""
+    # use persistent memory to save conversation history
+    # TODO: be compatible with SQLite / PostgreSQL
+    memory = MemorySaver()
+
+    # build state graph
+    builder = _build_base_graph()
+    return builder.compile(checkpointer=memory)
 
 if __name__ == '__main__':
     graph = build_agent()

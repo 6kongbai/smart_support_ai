@@ -34,6 +34,8 @@ async def planner(
 
     log.info(f"Planner Reasoning: {planner_output.reasoning}")
     log.info(f"Total Sub Tasks: {len(planner_output.tasks)}")
+    for task in planner_output.tasks:
+        log.info(f"[{task.sub_query}] Task: {task.selected_tool}")
 
     return {"tasks": planner_output.tasks}
 

@@ -14,7 +14,6 @@ def get_milvus() -> Milvus:
     )
 
 
-retriever = get_milvus().as_retriever(search_type="mmr")
 
 
 if __name__ == '__main__':

@@ -1,22 +1,22 @@
-from typing import cast, Dict, List, Literal
+from typing import cast, Dict, List, Literal, Any
 
-from langchain_core.messages import BaseMessage, AIMessage, SystemMessage
+from langchain_core.messages import BaseMessage, AIMessage, SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from loguru import logger
 
 from app.graph.prompts import CHECK_HALLUCINATIONS
-from app.graph.state import OverallState, InputState
-from app.graph.types import Router, JumpTo, GuardrailsOutput, GradeHallucinations
-from app.graph.utils import get_guardrail_check_chain, get_contextualize_question_chain
+from app.graph.state import OverallState
+from app.graph.types import Router, GuardrailsOutput, GradeHallucinations
+from app.graph.utils import get_guardrail_check_chain, get_analyze_and_route_chain, get_general_chain, \
+    get_additional_chain
 from app.graphrag.builder import build_graph_rag_agent
-from app.llms.llm import get_chat_model, get_router_model
-from app.prompts.template import apply_prompt_template
+from app.llms.llm import get_router_model
 
 
 async def analyze_and_route_query(
-        state: InputState, *, config: RunnableConfig
-) -> Dict[str, JumpTo | str]:
+        state: OverallState, *, config: RunnableConfig
+) -> dict[str, Any]:
     """
     Analyze the user query and determine the next routing step.
     
@@ -27,23 +27,36 @@ async def analyze_and_route_query(
     Args:
         state (State): The current state containing conversation history.
         config (RunnableConfig): Configuration for the language model.
-
-    Returns:
-        dict[str, JumpTo | str]: A dictionary containing the next jump target
-                                 and the reason for that decision.
     """
-    # TODO 硬路由到文件和图片
-    messages = apply_prompt_template("intent_router", state)
+    thread_id = config.get("configurable", {}).get("thread_id", None)
+    log = logger.bind(thread_id=thread_id)
 
-    # Use structured output to determine the intent and next step
-    response = cast(
-        Router,
-        await get_router_model()
-        .with_structured_output(Router)
-        .ainvoke(messages, config=config)
+    last_user_msg = state["messages"][-1]
+    if state.get("reformulate", False):
+        additional_info = last_user_msg.content
+        original_question = state.get("original_question")
+        question = (
+            f"{original_question}\n\n"
+            f"补充信息：{additional_info}"
+        ).strip()
+        log.info("merged question for routing: %s", question)
+    else:
+        question = last_user_msg.content
+    chat_history = state["messages"][:-1]
+
+    # TODO 硬路由到文件和图片
+    analyze_and_route_chain = get_analyze_and_route_chain()
+    response = await analyze_and_route_chain.ainvoke(
+        {"chat_history": chat_history, "question": question}, config=config
     )
 
-    return {"reasoning": response.reasoning, "next": response.next}
+    return {
+        "reasoning": response.reasoning,
+        "next": response.next,
+        "reformulate": False,
+        "original_question": "",
+        "question": question
+    }
 
 
 async def respond_to_general_query(
@@ -65,8 +78,8 @@ async def respond_to_general_query(
 
     log.info(">> LLM一般回应")
 
-    messages = apply_prompt_template("general_query", state)
-    response = await get_chat_model().ainvoke(messages, config=config)
+    chain = get_general_chain(state["reasoning"])
+    response = await chain.ainvoke({"question": state["question"]}, config=config)
 
     return Command(
         goto="__end__",
@@ -94,17 +107,21 @@ async def get_additional_info(
     # 第一步：安全护栏检查(GuardrailCheck)
     guardrail_check_chain = get_guardrail_check_chain()
     guard_result: GuardrailsOutput = await guardrail_check_chain.ainvoke(
-        {"question": state["messages"][-1] if state["messages"] else ""}, config=config
+        {"question": state["question"]}, config=config
     )
 
     # 2. 根据决策行动
     if guard_result.decision == "continue":
         log.info("-----Pass guardrails check-----")
-        ask_messages = apply_prompt_template("get_additional", state)
-        response = await get_chat_model().ainvoke(ask_messages, config=config)
+        chain = get_additional_chain(state["reasoning"])
+        response = await chain.ainvoke({"question": state["question"]}, config=config)
         return Command(
             goto="__end__",
-            update={"messages": [response]}
+            update={
+                "messages": [response],
+                "reformulate": True,
+                "original_question": state["question"]
+            }
         )
     else:
         log.info("-----Fail to pass guardrails check-----")
@@ -126,25 +143,7 @@ async def create_research_plan(
     thread_id = config.get("configurable", {}).get("thread_id", None)
     log = logger.bind(thread_id=thread_id)
 
-    chat_history = state["messages"][:-1] if len(state["messages"]) > 1 else []
-    latest_input = state["messages"][-1].content
-
-    contextualize_question_chain = get_contextualize_question_chain()
-
-    log.info(f"Original Input: {latest_input}")
-
-    # 只有当有历史记录时才需要重写，否则直接使用原问题
-    if chat_history:
-        reformulated_msg = await contextualize_question_chain.ainvoke(
-            {"chat_history": chat_history, "input": latest_input},
-            config=config
-        )
-        final_query = reformulated_msg.content
-        log.info(f"Reformulated Query: {final_query}")
-    else:
-        final_query = latest_input
-
-    question_payload = {"question": final_query}
+    question_payload = {"question": state["question"]}
 
     # 第一步：安全护栏检查(GuardrailCheck)
     guardrail_check_chain = get_guardrail_check_chain()
@@ -193,16 +192,18 @@ async def check_hallucinations(
 
     system_prompt = CHECK_HALLUCINATIONS.format(
         documents=state["documents"],
-        generation=state["messages"][-1]
+        generation=state["messages"][-1].content,  # 获取最新生成的回答内容
+        question=state["question"]  # 传入用户的问题
     )
-    messages = [SystemMessage(content=system_prompt)] + state["messages"]
 
+    messages = [SystemMessage(content=system_prompt)]
+
+    # 3. 调用模型
     response: GradeHallucinations = cast(
         GradeHallucinations, await get_router_model().
         with_structured_output(GradeHallucinations).
         ainvoke(messages, config=config)
     )
-
     return Command(
         goto="__end__",
         update={
